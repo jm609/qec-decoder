@@ -1,0 +1,119 @@
+{
+  "schema_version": "sample_dataset.v4",
+  "family": "stage_a_si1000",
+  "stage": "A",
+  "description": "Uniform SI1000-Base noisy circuit",
+  "scaffold": {
+    "variant": "stim_rotated",
+    "schedule_source": "stim_rotated",
+    "is_real_willow_schedule": false
+  },
+  "circuit": {
+    "distance": 7,
+    "rounds": 14,
+    "basis": "z",
+    "variant": "stim_rotated",
+    "num_qubits": 118,
+    "num_measurements": 721,
+    "num_detectors": 672,
+    "num_observables": 1
+  },
+  "sampling": {
+    "shots": 5000,
+    "seed": null,
+    "stored_detector_events_dtype": "uint8",
+    "stored_observable_flips_dtype": "uint8",
+    "stored_logical_label_dtype": "uint8",
+    "stored_detector_coordinates_dtype": "float32",
+    "stored_detector_events_shape": [
+      5000,
+      672
+    ],
+    "stored_observable_flips_shape": [
+      5000,
+      1
+    ],
+    "stored_logical_label_shape": [
+      5000
+    ],
+    "stored_detector_coordinates_shape": [
+      672,
+      3
+    ],
+    "logical_label_definition": "observable_flips[:, 0] when num_observables == 1"
+  },
+  "qc_stats": {
+    "detector_event_fraction": 0.041535416666666665,
+    "logical_flip_fraction": 0.3258,
+    "observable_flip_fraction_per_observable": [
+      0.3258
+    ],
+    "avg_detector_weight_per_shot": 27.9118,
+    "avg_observable_weight_per_shot": 0.3258
+  },
+  "dem": {
+    "kwargs": {
+      "decompose_errors": true
+    },
+    "num_detectors": 672,
+    "num_observables": 1
+  },
+  "instruction_histogram": {
+    "CX": 56,
+    "DEPOLARIZE1": 116,
+    "DEPOLARIZE2": 56,
+    "DETECTOR": 672,
+    "H": 28,
+    "M": 1,
+    "MR": 14,
+    "OBSERVABLE_INCLUDE": 1,
+    "QUBIT_COORDS": 97,
+    "R": 1,
+    "SHIFT_COORDS": 13,
+    "TICK": 98,
+    "X_ERROR": 30
+  },
+  "artifacts": {
+    "samples_npz": "samples.npz",
+    "circuit_stim": "circuit.stim",
+    "detector_error_model_dem": "detector_error_model.dem",
+    "metadata_json": "metadata.json",
+    "upstream_metadata_json": "upstream_metadata.json",
+    "config_json": "config.json"
+  },
+  "hashes": {
+    "circuit_sha256": "78945e83c18fb18210e5be750c045752890181b4ab5453a0bbdbe8568d22f9c0",
+    "dem_sha256": "30806d12f6c7fc1f9ec21517c18eb294b36ee5fad17664211719d18dd84799aa",
+    "detector_events_sha256": "7fd9a278212c0ad0a4094ef69df89017828bea58ec8fb9bc0e0474a0a2f06e0c",
+    "observable_flips_sha256": "ed75fd827756a4977e73ffbe8f510d9c826d0dd4b8e0467619e1c09767643dcd",
+    "logical_label_sha256": "ffc314ab84b705a5426c7478c0aee8c24009a395a637be35ae4c6f02f7bec124",
+    "detector_coordinates_sha256": "c2ac964989c61223417d6113fa52bdd8db26069d8b8f022b4eaae22758e27960"
+  },
+  "upstream_summary": {
+    "experiment_name": "stage_a_si1000_base",
+    "experiment_tag": "stage_a_si1000_base__d7_r14_z_stim_rotated__sc_si1000_base_v1",
+    "noise_stage": "A",
+    "noise_version": "sc_si1000_base_v1",
+    "distance": 7,
+    "rounds": 14,
+    "basis": "z",
+    "variant": "stim_rotated",
+    "p": 0.0015,
+    "p_cz": 0.0015,
+    "p_1q": 0.00015000000000000001,
+    "p_reset": 0.003,
+    "p_meas": 0.0075,
+    "p_idle": 0.00015000000000000001,
+    "p_ridle": 0.003,
+    "num_qubits": 118,
+    "num_measurements": 721,
+    "num_detectors": 672,
+    "num_observables": 1
+  },
+  "generator": {
+    "script": "sample_dataset.py",
+    "created_at_utc": "2026-03-22T13:34:54Z",
+    "stim_version": "1.15.0",
+    "numpy_version": "2.2.6"
+  }
+}

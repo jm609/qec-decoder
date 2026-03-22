@@ -1,0 +1,297 @@
+detector(0, 4, 0) D0
+detector(0, 8, 0) D1
+detector(0, 12, 0) D2
+detector(2, 2, 0) D3
+detector(2, 6, 0) D4
+detector(2, 10, 0) D5
+detector(4, 4, 0) D6
+detector(4, 8, 0) D7
+detector(4, 12, 0) D8
+detector(6, 2, 0) D9
+detector(6, 6, 0) D10
+detector(6, 10, 0) D11
+detector(8, 4, 0) D12
+detector(8, 8, 0) D13
+detector(8, 12, 0) D14
+detector(10, 2, 0) D15
+detector(10, 6, 0) D16
+detector(10, 10, 0) D17
+detector(12, 4, 0) D18
+detector(12, 8, 0) D19
+detector(12, 12, 0) D20
+detector(14, 2, 0) D21
+detector(14, 6, 0) D22
+detector(14, 10, 0) D23
+shift_detectors(0, 0, 1) 0
+detector(2, 0, 0) D24
+detector(6, 0, 0) D25
+detector(10, 0, 0) D26
+detector(2, 2, 0) D27
+detector(4, 2, 0) D28
+detector(6, 2, 0) D29
+detector(8, 2, 0) D30
+detector(10, 2, 0) D31
+detector(12, 2, 0) D32
+detector(14, 2, 0) D33
+detector(0, 4, 0) D34
+detector(2, 4, 0) D35
+detector(4, 4, 0) D36
+detector(6, 4, 0) D37
+detector(8, 4, 0) D38
+detector(10, 4, 0) D39
+detector(12, 4, 0) D40
+detector(2, 6, 0) D41
+detector(4, 6, 0) D42
+detector(6, 6, 0) D43
+detector(8, 6, 0) D44
+detector(10, 6, 0) D45
+detector(12, 6, 0) D46
+detector(14, 6, 0) D47
+detector(0, 8, 0) D48
+detector(2, 8, 0) D49
+detector(4, 8, 0) D50
+detector(6, 8, 0) D51
+detector(8, 8, 0) D52
+detector(10, 8, 0) D53
+detector(12, 8, 0) D54
+detector(2, 10, 0) D55
+detector(4, 10, 0) D56
+detector(6, 10, 0) D57
+detector(8, 10, 0) D58
+detector(10, 10, 0) D59
+detector(12, 10, 0) D60
+detector(14, 10, 0) D61
+detector(0, 12, 0) D62
+detector(2, 12, 0) D63
+detector(4, 12, 0) D64
+detector(6, 12, 0) D65
+detector(8, 12, 0) D66
+detector(10, 12, 0) D67
+detector(12, 12, 0) D68
+detector(4, 14, 0) D69
+detector(8, 14, 0) D70
+detector(12, 14, 0) D71
+repeat 5 {
+    shift_detectors(0, 0, 1) 0
+    detector(2, 0, 0) D72
+    detector(6, 0, 0) D73
+    detector(10, 0, 0) D74
+    detector(2, 2, 0) D75
+    detector(4, 2, 0) D76
+    detector(6, 2, 0) D77
+    detector(8, 2, 0) D78
+    detector(10, 2, 0) D79
+    detector(12, 2, 0) D80
+    detector(14, 2, 0) D81
+    detector(0, 4, 0) D82
+    detector(2, 4, 0) D83
+    detector(4, 4, 0) D84
+    detector(6, 4, 0) D85
+    detector(8, 4, 0) D86
+    detector(10, 4, 0) D87
+    detector(12, 4, 0) D88
+    detector(2, 6, 0) D89
+    detector(4, 6, 0) D90
+    detector(6, 6, 0) D91
+    detector(8, 6, 0) D92
+    detector(10, 6, 0) D93
+    detector(12, 6, 0) D94
+    detector(14, 6, 0) D95
+    detector(0, 8, 0) D96
+    detector(2, 8, 0) D97
+    detector(4, 8, 0) D98
+    detector(6, 8, 0) D99
+    detector(8, 8, 0) D100
+    detector(10, 8, 0) D101
+    detector(12, 8, 0) D102
+    detector(2, 10, 0) D103
+    detector(4, 10, 0) D104
+    detector(6, 10, 0) D105
+    detector(8, 10, 0) D106
+    detector(10, 10, 0) D107
+    detector(12, 10, 0) D108
+    detector(14, 10, 0) D109
+    detector(0, 12, 0) D110
+    detector(2, 12, 0) D111
+    detector(4, 12, 0) D112
+    detector(6, 12, 0) D113
+    detector(8, 12, 0) D114
+    detector(10, 12, 0) D115
+    detector(12, 12, 0) D116
+    detector(4, 14, 0) D117
+    detector(8, 14, 0) D118
+    detector(12, 14, 0) D119
+    shift_detectors(0, 0, 1) 0
+    detector(2, 0, 0) D120
+    detector(6, 0, 0) D121
+    detector(10, 0, 0) D122
+    detector(2, 2, 0) D123
+    detector(4, 2, 0) D124
+    detector(6, 2, 0) D125
+    detector(8, 2, 0) D126
+    detector(10, 2, 0) D127
+    detector(12, 2, 0) D128
+    detector(14, 2, 0) D129
+    detector(0, 4, 0) D130
+    detector(2, 4, 0) D131
+    detector(4, 4, 0) D132
+    detector(6, 4, 0) D133
+    detector(8, 4, 0) D134
+    detector(10, 4, 0) D135
+    detector(12, 4, 0) D136
+    detector(2, 6, 0) D137
+    detector(4, 6, 0) D138
+    detector(6, 6, 0) D139
+    detector(8, 6, 0) D140
+    detector(10, 6, 0) D141
+    detector(12, 6, 0) D142
+    detector(14, 6, 0) D143
+    detector(0, 8, 0) D144
+    detector(2, 8, 0) D145
+    detector(4, 8, 0) D146
+    detector(6, 8, 0) D147
+    detector(8, 8, 0) D148
+    detector(10, 8, 0) D149
+    detector(12, 8, 0) D150
+    detector(2, 10, 0) D151
+    detector(4, 10, 0) D152
+    detector(6, 10, 0) D153
+    detector(8, 10, 0) D154
+    detector(10, 10, 0) D155
+    detector(12, 10, 0) D156
+    detector(14, 10, 0) D157
+    detector(0, 12, 0) D158
+    detector(2, 12, 0) D159
+    detector(4, 12, 0) D160
+    detector(6, 12, 0) D161
+    detector(8, 12, 0) D162
+    detector(10, 12, 0) D163
+    detector(12, 12, 0) D164
+    detector(4, 14, 0) D165
+    detector(8, 14, 0) D166
+    detector(12, 14, 0) D167
+    shift_detectors 96
+}
+shift_detectors(0, 0, 1) 0
+detector(2, 0, 0) D72
+detector(6, 0, 0) D73
+detector(10, 0, 0) D74
+detector(2, 2, 0) D75
+detector(4, 2, 0) D76
+detector(6, 2, 0) D77
+detector(8, 2, 0) D78
+detector(10, 2, 0) D79
+detector(12, 2, 0) D80
+detector(14, 2, 0) D81
+detector(0, 4, 0) D82
+detector(2, 4, 0) D83
+detector(4, 4, 0) D84
+detector(6, 4, 0) D85
+detector(8, 4, 0) D86
+detector(10, 4, 0) D87
+detector(12, 4, 0) D88
+detector(2, 6, 0) D89
+detector(4, 6, 0) D90
+detector(6, 6, 0) D91
+detector(8, 6, 0) D92
+detector(10, 6, 0) D93
+detector(12, 6, 0) D94
+detector(14, 6, 0) D95
+detector(0, 8, 0) D96
+detector(2, 8, 0) D97
+detector(4, 8, 0) D98
+detector(6, 8, 0) D99
+detector(8, 8, 0) D100
+detector(10, 8, 0) D101
+detector(12, 8, 0) D102
+detector(2, 10, 0) D103
+detector(4, 10, 0) D104
+detector(6, 10, 0) D105
+detector(8, 10, 0) D106
+detector(10, 10, 0) D107
+detector(12, 10, 0) D108
+detector(14, 10, 0) D109
+detector(0, 12, 0) D110
+detector(2, 12, 0) D111
+detector(4, 12, 0) D112
+detector(6, 12, 0) D113
+detector(8, 12, 0) D114
+detector(10, 12, 0) D115
+detector(12, 12, 0) D116
+detector(4, 14, 0) D117
+detector(8, 14, 0) D118
+detector(12, 14, 0) D119
+shift_detectors(0, 0, 1) 0
+detector(2, 0, 0) D120
+detector(6, 0, 0) D121
+detector(10, 0, 0) D122
+detector(2, 2, 0) D123
+detector(4, 2, 0) D124
+detector(6, 2, 0) D125
+detector(8, 2, 0) D126
+detector(10, 2, 0) D127
+detector(12, 2, 0) D128
+detector(14, 2, 0) D129
+detector(0, 4, 0) D130
+detector(2, 4, 0) D131
+detector(4, 4, 0) D132
+detector(6, 4, 0) D133
+detector(8, 4, 0) D134
+detector(10, 4, 0) D135
+detector(12, 4, 0) D136
+detector(2, 6, 0) D137
+detector(4, 6, 0) D138
+detector(6, 6, 0) D139
+detector(8, 6, 0) D140
+detector(10, 6, 0) D141
+detector(12, 6, 0) D142
+detector(14, 6, 0) D143
+detector(0, 8, 0) D144
+detector(2, 8, 0) D145
+detector(4, 8, 0) D146
+detector(6, 8, 0) D147
+detector(8, 8, 0) D148
+detector(10, 8, 0) D149
+detector(12, 8, 0) D150
+detector(2, 10, 0) D151
+detector(4, 10, 0) D152
+detector(6, 10, 0) D153
+detector(8, 10, 0) D154
+detector(10, 10, 0) D155
+detector(12, 10, 0) D156
+detector(14, 10, 0) D157
+detector(0, 12, 0) D158
+detector(2, 12, 0) D159
+detector(4, 12, 0) D160
+detector(6, 12, 0) D161
+detector(8, 12, 0) D162
+detector(10, 12, 0) D163
+detector(12, 12, 0) D164
+detector(4, 14, 0) D165
+detector(8, 14, 0) D166
+detector(12, 14, 0) D167
+detector(0, 4, 1) D168
+detector(0, 8, 1) D169
+detector(0, 12, 1) D170
+detector(2, 2, 1) D171
+detector(2, 6, 1) D172
+detector(2, 10, 1) D173
+detector(4, 4, 1) D174
+detector(4, 8, 1) D175
+detector(4, 12, 1) D176
+detector(6, 2, 1) D177
+detector(6, 6, 1) D178
+detector(6, 10, 1) D179
+detector(8, 4, 1) D180
+detector(8, 8, 1) D181
+detector(8, 12, 1) D182
+detector(10, 2, 1) D183
+detector(10, 6, 1) D184
+detector(10, 10, 1) D185
+detector(12, 4, 1) D186
+detector(12, 8, 1) D187
+detector(12, 12, 1) D188
+detector(14, 2, 1) D189
+detector(14, 6, 1) D190
+detector(14, 10, 1) D191
+logical_observable L0

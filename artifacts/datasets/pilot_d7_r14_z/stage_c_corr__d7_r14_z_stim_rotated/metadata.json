@@ -1,0 +1,134 @@
+{
+  "schema_version": "sample_dataset.v4",
+  "family": "stage_c_corr",
+  "stage": "C",
+  "description": "Stage C Willow-inspired correlated stray surrogate",
+  "scaffold": {
+    "variant": "stim_rotated",
+    "schedule_source": "stim_rotated",
+    "is_real_willow_schedule": false
+  },
+  "circuit": {
+    "distance": 7,
+    "rounds": 14,
+    "basis": "z",
+    "variant": "stim_rotated",
+    "num_qubits": 118,
+    "num_measurements": 721,
+    "num_detectors": 672,
+    "num_observables": 1
+  },
+  "sampling": {
+    "shots": 5000,
+    "seed": null,
+    "stored_detector_events_dtype": "uint8",
+    "stored_observable_flips_dtype": "uint8",
+    "stored_logical_label_dtype": "uint8",
+    "stored_detector_coordinates_dtype": "float32",
+    "stored_detector_events_shape": [
+      5000,
+      672
+    ],
+    "stored_observable_flips_shape": [
+      5000,
+      1
+    ],
+    "stored_logical_label_shape": [
+      5000
+    ],
+    "stored_detector_coordinates_shape": [
+      672,
+      3
+    ],
+    "logical_label_definition": "observable_flips[:, 0] when num_observables == 1"
+  },
+  "qc_stats": {
+    "detector_event_fraction": 0.042807142857142856,
+    "logical_flip_fraction": 0.3258,
+    "observable_flip_fraction_per_observable": [
+      0.3258
+    ],
+    "avg_detector_weight_per_shot": 28.7664,
+    "avg_observable_weight_per_shot": 0.3258
+  },
+  "dem": {
+    "kwargs": {
+      "decompose_errors": true,
+      "approximate_disjoint_errors": true
+    },
+    "num_detectors": 672,
+    "num_observables": 1
+  },
+  "instruction_histogram": {
+    "CX": 2352,
+    "DEPOLARIZE1": 7348,
+    "DEPOLARIZE2": 2352,
+    "DETECTOR": 672,
+    "E": 2352,
+    "H": 28,
+    "M": 1,
+    "MR": 14,
+    "OBSERVABLE_INCLUDE": 1,
+    "PAULI_CHANNEL_2": 2352,
+    "QUBIT_COORDS": 97,
+    "R": 1,
+    "SHIFT_COORDS": 13,
+    "TICK": 98,
+    "X_ERROR": 1490
+  },
+  "artifacts": {
+    "samples_npz": "samples.npz",
+    "circuit_stim": "circuit.stim",
+    "detector_error_model_dem": "detector_error_model.dem",
+    "metadata_json": "metadata.json",
+    "upstream_metadata_json": "upstream_metadata.json",
+    "config_json": "config.json"
+  },
+  "hashes": {
+    "circuit_sha256": "0ceb037bd86d0a9c858652fca6b3dd77de4e02a471aed0d0d6640a6b05086349",
+    "dem_sha256": "556cf9590dd5c4335c8aa3ef8fae8dc4ffa76f62081bbcb8381289cd34242104",
+    "detector_events_sha256": "413bd53b4cb76314b44783d59752f422747082877862b97ef0cd9105c3013dea",
+    "observable_flips_sha256": "e22a28a746183c75182d8b9ee94a17f8a692e142cf8af839819f3ac9ccfc4dfb",
+    "logical_label_sha256": "a0193d6cacdcef5fd1f8982e24e62621451eea1912e4ba338630553869afac20",
+    "detector_coordinates_sha256": "c2ac964989c61223417d6113fa52bdd8db26069d8b8f022b4eaae22758e27960"
+  },
+  "upstream_summary": {
+    "experiment_name": "stage_c_willow_corr",
+    "experiment_tag": "stage_c_willow_corr__d7_r14_z_stim_rotated__sc_si1000_willowcore_corr_v1",
+    "noise_stage": "C",
+    "noise_version": "sc_si1000_willowcore_corr_v1",
+    "distance": 7,
+    "rounds": 14,
+    "basis": "z",
+    "variant": "stim_rotated",
+    "p": 0.0015,
+    "p_cz": 0.0015,
+    "p_1q": 0.00015000000000000001,
+    "p_reset": 0.003,
+    "p_meas": 0.0075,
+    "p_idle": 0.00015000000000000001,
+    "p_ridle": 0.003,
+    "num_qubits": 118,
+    "num_measurements": 721,
+    "num_detectors": 672,
+    "num_observables": 1,
+    "correlated_instruction_counts": {
+      "CORRELATED_ERROR": 2352,
+      "ELSE_CORRELATED_ERROR": 0,
+      "PAULI_CHANNEL_2": 2352
+    },
+    "supported_stages": [
+      "B",
+      "C"
+    ],
+    "stage_d_postprocess_pending": true,
+    "stage_e_postprocess_pending": true,
+    "dem_uses_approximate_disjoint_errors": true
+  },
+  "generator": {
+    "script": "sample_dataset.py",
+    "created_at_utc": "2026-03-22T13:34:55Z",
+    "stim_version": "1.15.0",
+    "numpy_version": "2.2.6"
+  }
+}

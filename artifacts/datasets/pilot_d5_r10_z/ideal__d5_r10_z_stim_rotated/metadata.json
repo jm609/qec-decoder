@@ -1,0 +1,105 @@
+{
+  "schema_version": "sample_dataset.v4",
+  "family": "ideal",
+  "stage": "ideal",
+  "description": "Ideal surface-code memory circuit on the current scaffold",
+  "scaffold": {
+    "variant": "stim_rotated",
+    "schedule_source": "stim_rotated",
+    "is_real_willow_schedule": false
+  },
+  "circuit": {
+    "distance": 5,
+    "rounds": 10,
+    "basis": "z",
+    "variant": "stim_rotated",
+    "num_qubits": 64,
+    "num_measurements": 265,
+    "num_detectors": 240,
+    "num_observables": 1
+  },
+  "sampling": {
+    "shots": 5000,
+    "seed": null,
+    "stored_detector_events_dtype": "uint8",
+    "stored_observable_flips_dtype": "uint8",
+    "stored_logical_label_dtype": "uint8",
+    "stored_detector_coordinates_dtype": "float32",
+    "stored_detector_events_shape": [
+      5000,
+      240
+    ],
+    "stored_observable_flips_shape": [
+      5000,
+      1
+    ],
+    "stored_logical_label_shape": [
+      5000
+    ],
+    "stored_detector_coordinates_shape": [
+      240,
+      3
+    ],
+    "logical_label_definition": "observable_flips[:, 0] when num_observables == 1"
+  },
+  "qc_stats": {
+    "detector_event_fraction": 0.0,
+    "logical_flip_fraction": 0.0,
+    "observable_flip_fraction_per_observable": [
+      0.0
+    ],
+    "avg_detector_weight_per_shot": 0.0,
+    "avg_observable_weight_per_shot": 0.0
+  },
+  "dem": {
+    "kwargs": {
+      "decompose_errors": true
+    },
+    "num_detectors": 240,
+    "num_observables": 1
+  },
+  "instruction_histogram": {
+    "CX": 40,
+    "DETECTOR": 240,
+    "H": 20,
+    "M": 1,
+    "MR": 10,
+    "OBSERVABLE_INCLUDE": 1,
+    "QUBIT_COORDS": 49,
+    "R": 1,
+    "SHIFT_COORDS": 9,
+    "TICK": 70
+  },
+  "artifacts": {
+    "samples_npz": "samples.npz",
+    "circuit_stim": "circuit.stim",
+    "detector_error_model_dem": "detector_error_model.dem",
+    "metadata_json": "metadata.json",
+    "upstream_metadata_json": "upstream_metadata.json",
+    "config_json": "config.json"
+  },
+  "hashes": {
+    "circuit_sha256": "24effaa01f86c761c47e0b75ff2bfdb9a71a862bf0d5a975d876857671dc3df4",
+    "dem_sha256": "cebf9ce0e115fa738d025e1626f6833945b90affe8328e04cb2a0db62e936666",
+    "detector_events_sha256": "fcbe796a0c1da322cfa7e913ef231257943f5b3a4b2dcace569e00ebce6d2896",
+    "observable_flips_sha256": "98b990503f3a02f043cf3bbd3e8080ebe8179ac37b07c8ff620ba653e1a4eb59",
+    "logical_label_sha256": "2f50344c79349a0ee3a794d9f5e62890ba8794d2fcd905f90856c377fb543e2b",
+    "detector_coordinates_sha256": "525e7400851c3b4c40bbddd16aa6a4fc74367ca285ea84aa72df5ad8b9ce00f9"
+  },
+  "upstream_summary": {
+    "distance": 5,
+    "rounds": 10,
+    "basis": "z",
+    "variant": "stim_rotated",
+    "num_qubits": 64,
+    "num_measurements": 265,
+    "num_detectors": 240,
+    "num_observables": 1
+  },
+  "generator": {
+    "script": "sample_dataset.py",
+    "created_at_utc": "2026-03-22T13:34:53Z",
+    "stim_version": "1.15.0",
+    "numpy_version": "2.2.6"
+  }
+}
