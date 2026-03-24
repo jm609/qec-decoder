@@ -23,3 +23,8 @@ models/saved_weights/
 Thumbs.db
 .vscode/
 .idea/
+
+artifacts/*
+!artifacts/.gitkeep
+!artifacts/datasets/.gitkeep
+!artifacts/eval/.gitkeep
