@@ -1,30 +1,39 @@
+# Python cache / build
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Virtual environments
 qec_bnn/
 env/
 venv/
 .conda/
 
+# Data / numeric artifacts
 *.npy
 *.npz
 *.csv
 *.dat
 *.log
 
+# Model checkpoints / weights
 *.pt
 *.pth
 *.ckpt
 models/saved_weights/
 
+# Notebook / editor / OS
 .ipynb_checkpoints/
-
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
 
-artifacts/*
+# Generated experiment artifacts
+artifacts/**
+!artifacts/
 !artifacts/.gitkeep
+!artifacts/datasets/
 !artifacts/datasets/.gitkeep
+!artifacts/eval/
 !artifacts/eval/.gitkeep
