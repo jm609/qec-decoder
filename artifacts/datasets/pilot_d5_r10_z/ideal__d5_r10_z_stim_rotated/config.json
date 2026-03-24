@@ -1,8 +1,0 @@
-{
-  "config": {
-    "distance": 5,
-    "rounds": 10,
-    "basis": "z",
-    "variant": "stim_rotated"
-  }
-}

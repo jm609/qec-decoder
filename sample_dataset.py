@@ -64,7 +64,7 @@ from noise_willowcore import (
 )
 
 
-SCHEMA_VERSION = "sample_dataset.v4"
+SCHEMA_VERSION = "sample_dataset.v5"
 SUPPORTED_FAMILIES = (
     "ideal",
     "stage_a_si1000",
@@ -201,8 +201,8 @@ def _family_output_dir(
     return out_root / tag
 
 
-def _path_for_manifest(path: Path) -> str:
-    return path.as_posix()
+def _path_for_manifest(path: Path, out_root: Path) -> str:
+    return path.relative_to(out_root).as_posix()
 
 
 def _build_ideal(
@@ -563,15 +563,19 @@ def main() -> None:
     args.out_root.mkdir(parents=True, exist_ok=True)
 
     manifest: dict[str, Any] = {
-        "schema_version": SCHEMA_VERSION,
-        "created_at_utc": _utc_now_iso(),
-        "distance": args.distance,
-        "rounds": args.rounds,
-        "basis": args.basis,
-        "variant": args.variant,
-        "shots": args.shots,
-        "requested_families": list(args.families),
-        "family_dirs": {},
+    "schema_version": SCHEMA_VERSION,
+    "manifest_format": {
+        "family_dirs_base": "manifest_parent",
+        "path_style": "posix_relative",
+    },
+    "created_at_utc": _utc_now_iso(),
+    "distance": args.distance,
+    "rounds": args.rounds,
+    "basis": args.basis,
+    "variant": args.variant,
+    "shots": args.shots,
+    "requested_families": list(args.families),
+    "family_dirs": {},
     }
 
     for family in args.families:
@@ -587,7 +591,7 @@ def main() -> None:
             seed=args.seed,
             overwrite=args.overwrite,
         )
-        manifest["family_dirs"][family] = _path_for_manifest(family_dir)
+        manifest["family_dirs"][family] = _path_for_manifest(family_dir, args.out_root)
 
     _write_json(args.out_root / "manifest.json", manifest)
     print(json.dumps(manifest, indent=2, ensure_ascii=False))
