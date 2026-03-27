@@ -46,6 +46,35 @@ DETECTOR_TYPE_VOCAB = {
     2: "z_check",
 }
 
+VALIDATED_STIM_ROTATED_CHECKERBOARD_TYPE_MAP = {
+    0: 2,  # z_check
+    1: 1,  # x_check
+}
+
+def get_validated_checkerboard_type_map(
+    cfg: CircuitConfig | ExperimentConfig,
+) -> dict[int, int]:
+    """
+    Return the locally validated checkerboard->detector_type mapping
+    for the current practical scaffold.
+
+    Current validation status:
+      - stim_rotated: validated
+      - xzzx: currently reuses the same stim_rotated scaffold, so the same
+        structural mapping is used for now
+
+    IMPORTANT:
+      If the future xzzx path is replaced with a real Willow-native schedule,
+      this mapping must be revalidated.
+    """
+    circuit_cfg, _ = _resolve_experiment_config(cfg)
+
+    if circuit_cfg.variant in {"stim_rotated", "xzzx"}:
+        return dict(VALIDATED_STIM_ROTATED_CHECKERBOARD_TYPE_MAP)
+
+    raise ValueError(
+        f"No validated checkerboard_type_map for variant={circuit_cfg.variant!r}"
+    )
 
 def _require_stim() -> Any:
     if stim is None:

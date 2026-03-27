@@ -60,6 +60,7 @@ from circuits import (
     summarize_circuit,
     get_detector_coordinate_array,
     export_detector_semantics,
+    get_validated_checkerboard_type_map,
 )
 from noise_si1000 import (
     build_si1000_memory_circuit,
@@ -434,7 +435,7 @@ def save_family_dataset(
     detector_semantics = export_detector_semantics(
         built.cfg,
         circuit,
-        checkerboard_type_map=None,  # X/Z mapping 검증 전까지는 unknown 유지
+        checkerboard_type_map=get_validated_checkerboard_type_map(built.cfg),
     )
 
     dem = circuit.detector_error_model(**built.dem_kwargs)
@@ -553,7 +554,8 @@ def save_family_dataset(
             "detector_type_vocab": detector_semantics["detector_type_vocab"],
             "notes": [
                 "checkerboard_class is the safe structural class for the current scaffold",
-                "detector_type remains unknown until checkerboard-to-X/Z mapping is validated locally",
+                "detector_type uses the locally validated checkerboard-to-X/Z mapping",
+                "validated mapping for the current scaffold: class 0 -> z_check, class 1 -> x_check",
             ],
         },
         "instruction_histogram": _instruction_histogram(circuit),
