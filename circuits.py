@@ -26,6 +26,8 @@ import argparse
 import json
 import warnings
 
+import numpy as np
+
 try:
     import stim  # type: ignore
 except ImportError:
@@ -36,6 +38,13 @@ from config import CircuitConfig, ExperimentConfig
 
 class MissingStimError(ImportError):
     """Raised when Stim-dependent functionality is used without Stim installed."""
+
+
+DETECTOR_TYPE_VOCAB = {
+    0: "unknown",
+    1: "x_check",
+    2: "z_check",
+}
 
 
 def _require_stim() -> Any:
@@ -176,6 +185,131 @@ def get_detector_coordinates(circuit: Any) -> list[list[float]]:
         coord = coord_map.get(det_idx, [])
         coords.append([float(v) for v in coord])
     return coords
+
+
+def get_detector_coordinate_array(
+    circuit: Any,
+    *,
+    coord_dim: int = 3,
+    pad_value: float = np.nan,
+) -> np.ndarray:
+    """
+    Return detector coordinates as a fixed-shape float32 array.
+
+    Default shape is (num_detectors, 3), corresponding to the common
+    Stim coordinate convention (x, y, t). Missing coordinates are padded
+    with NaN.
+    """
+    raw = get_detector_coordinates(circuit)
+    arr = np.full((len(raw), coord_dim), pad_value, dtype=np.float32)
+
+    for i, coord in enumerate(raw):
+        n = min(len(coord), coord_dim)
+        if n > 0:
+            arr[i, :n] = np.asarray(coord[:n], dtype=np.float32)
+
+    return arr
+
+
+def infer_stim_rotated_detector_semantics(
+    detector_coords: np.ndarray,
+    *,
+    checkerboard_type_map: dict[int, int] | None = None,
+) -> dict[str, Any]:
+    """
+    Infer detector-level semantic metadata for the current stim_rotated scaffold.
+
+    Safe fields:
+      - detector_time_index
+      - detector_final_round_flag
+      - detector_boundary_flag
+      - detector_checkerboard_class
+
+    detector_type is left as 'unknown' unless a validated
+    checkerboard_type_map is explicitly provided.
+    """
+    coords = np.asarray(detector_coords, dtype=np.float32)
+    if coords.ndim != 2 or coords.shape[1] < 3:
+        raise ValueError(
+            f"detector_coords must have shape (N, >=3), got {coords.shape}"
+        )
+
+    x = coords[:, 0]
+    y = coords[:, 1]
+    t = coords[:, 2]
+
+    if np.isnan(t).any():
+        raise ValueError(
+            "stim_rotated semantic inference requires valid detector time coordinates"
+        )
+
+    detector_time_index = np.rint(t).astype(np.int16)
+
+    max_t = int(np.max(detector_time_index))
+    detector_final_round_flag = (detector_time_index == max_t).astype(np.uint8)
+
+    x_min = float(np.nanmin(x))
+    x_max = float(np.nanmax(x))
+    y_min = float(np.nanmin(y))
+    y_max = float(np.nanmax(y))
+
+    detector_boundary_flag = (
+        np.isclose(x, x_min)
+        | np.isclose(x, x_max)
+        | np.isclose(y, y_min)
+        | np.isclose(y, y_max)
+    ).astype(np.uint8)
+
+    # Safe structural class for the current scaffold.
+    x2 = np.rint(2.0 * x).astype(np.int16)
+    y2 = np.rint(2.0 * y).astype(np.int16)
+    detector_checkerboard_class = (((x2 + y2) // 2) & 1).astype(np.uint8)
+
+    detector_type = np.zeros_like(detector_checkerboard_class, dtype=np.uint8)
+    semantic_source = "stim_rotated_checkerboard_only"
+
+    if checkerboard_type_map is not None:
+        for cls, type_id in checkerboard_type_map.items():
+            detector_type[detector_checkerboard_class == int(cls)] = np.uint8(type_id)
+        semantic_source = "stim_rotated_type_map_validated"
+
+    return {
+        "detector_time_index": detector_time_index,
+        "detector_final_round_flag": detector_final_round_flag,
+        "detector_boundary_flag": detector_boundary_flag,
+        "detector_checkerboard_class": detector_checkerboard_class,
+        "detector_type": detector_type,
+        "detector_type_vocab": DETECTOR_TYPE_VOCAB,
+        "semantic_source": semantic_source,
+    }
+
+
+def export_detector_semantics(
+    cfg: CircuitConfig | ExperimentConfig,
+    circuit: Any,
+    *,
+    checkerboard_type_map: dict[int, int] | None = None,
+) -> dict[str, Any]:
+    """
+    Export detector semantic metadata for the current scaffold.
+
+    For now:
+      - stim_rotated: structural semantics inferred directly
+      - xzzx: still reuses the current stim_rotated scaffold, so we keep the
+        same structural inference but mark the source explicitly
+    """
+    circuit_cfg, _ = _resolve_experiment_config(cfg)
+    coords = get_detector_coordinate_array(circuit, coord_dim=3)
+
+    out = infer_stim_rotated_detector_semantics(
+        coords,
+        checkerboard_type_map=checkerboard_type_map,
+    )
+
+    if circuit_cfg.variant == "xzzx":
+        out["semantic_source"] = "xzzx_api_reuses_stim_rotated_scaffold"
+
+    return out
 
 
 def sample_detection_events_and_observables(

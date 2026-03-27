@@ -18,9 +18,16 @@ Design rules
 2. Treat the current practical scaffold as `stim_rotated` by default.
 3. Allow `variant="xzzx"`, but record explicitly that it still reuses the
    current Stim rotated scaffold and is not yet a real Willow schedule.
-4. Save the minimum fields needed by generate/train/eval:
-   detector events, observable flips, logical label, detector coordinates, metadata.
+4. Save canonical raw arrays for generate/train/eval:
+   detector events, observable flips, logical label, detector coordinates,
+   and detector semantic metadata.
 5. Also save circuit and DEM artifacts for reproducibility/debugging.
+
+Schema notes
+------------
+- v5 stored: detector_events, observable_flips, logical_label, detector_coordinates
+- v6 additionally stores: detector_time_index, detector_final_round_flag,
+  detector_boundary_flag, detector_checkerboard_class, detector_type
 """
 
 from dataclasses import asdict, dataclass
@@ -51,6 +58,8 @@ from circuits import (
     build_memory_circuit,
     export_dataset_metadata,
     summarize_circuit,
+    get_detector_coordinate_array,
+    export_detector_semantics,
 )
 from noise_si1000 import (
     build_si1000_memory_circuit,
@@ -64,7 +73,7 @@ from noise_willowcore import (
 )
 
 
-SCHEMA_VERSION = "sample_dataset.v5"
+SCHEMA_VERSION = "sample_dataset.v6"
 SUPPORTED_FAMILIES = (
     "ideal",
     "stage_a_si1000",
@@ -420,9 +429,12 @@ def save_family_dataset(
     circuit = built.circuit
     det_events, obs_flips = _sample_arrays(circuit, shots=shots, seed=seed)
     logical_label = _derive_logical_label(obs_flips)
-    detector_coords = np.asarray(
-        built.upstream_metadata["detector_coordinates"],
-        dtype=np.float32,
+
+    detector_coords = get_detector_coordinate_array(circuit, coord_dim=3)
+    detector_semantics = export_detector_semantics(
+        built.cfg,
+        circuit,
+        checkerboard_type_map=None,  # X/Z mapping 검증 전까지는 unknown 유지
     )
 
     dem = circuit.detector_error_model(**built.dem_kwargs)
@@ -433,6 +445,12 @@ def save_family_dataset(
     obs_flips_u8 = obs_flips.astype(np.uint8, copy=False)
     logical_label_u8 = logical_label.astype(np.uint8, copy=False)
     detector_coords_f32 = detector_coords.astype(np.float32, copy=False)
+
+    detector_time_index_i16 = detector_semantics["detector_time_index"].astype(np.int16, copy=False)
+    detector_final_round_flag_u8 = detector_semantics["detector_final_round_flag"].astype(np.uint8, copy=False)
+    detector_boundary_flag_u8 = detector_semantics["detector_boundary_flag"].astype(np.uint8, copy=False)
+    detector_checkerboard_class_u8 = detector_semantics["detector_checkerboard_class"].astype(np.uint8, copy=False)
+    detector_type_u8 = detector_semantics["detector_type"].astype(np.uint8, copy=False)
 
     npz_path = family_dir / "samples.npz"
     circuit_path = family_dir / "circuit.stim"
@@ -447,6 +465,11 @@ def save_family_dataset(
         observable_flips=obs_flips_u8,
         logical_label=logical_label_u8,
         detector_coordinates=detector_coords_f32,
+        detector_time_index=detector_time_index_i16,
+        detector_final_round_flag=detector_final_round_flag_u8,
+        detector_boundary_flag=detector_boundary_flag_u8,
+        detector_checkerboard_class=detector_checkerboard_class_u8,
+        detector_type=detector_type_u8,
     )
     circuit_path.write_text(circuit_text, encoding="utf-8")
     dem_path.write_text(dem_text, encoding="utf-8")
@@ -491,6 +514,16 @@ def save_family_dataset(
             "stored_logical_label_shape": list(logical_label_u8.shape),
             "stored_detector_coordinates_shape": list(detector_coords_f32.shape),
             "logical_label_definition": "observable_flips[:, 0] when num_observables == 1",
+            "stored_detector_time_index_dtype": "int16",
+            "stored_detector_final_round_flag_dtype": "uint8",
+            "stored_detector_boundary_flag_dtype": "uint8",
+            "stored_detector_checkerboard_class_dtype": "uint8",
+            "stored_detector_type_dtype": "uint8",
+            "stored_detector_time_index_shape": list(detector_time_index_i16.shape),
+            "stored_detector_final_round_flag_shape": list(detector_final_round_flag_u8.shape),
+            "stored_detector_boundary_flag_shape": list(detector_boundary_flag_u8.shape),
+            "stored_detector_checkerboard_class_shape": list(detector_checkerboard_class_u8.shape),
+            "stored_detector_type_shape": list(detector_type_u8.shape),
         },
         "qc_stats": {
             "detector_event_fraction": float(det_events_u8.mean()),
@@ -505,6 +538,23 @@ def save_family_dataset(
             "kwargs": built.dem_kwargs,
             "num_detectors": int(dem.num_detectors),
             "num_observables": int(dem.num_observables),
+        },
+        "detector_semantics": {
+            "schema_version": "stim_rotated_detector_semantics.v1",
+            "semantic_source": detector_semantics["semantic_source"],
+            "stored_keys": [
+                "detector_coordinates",
+                "detector_time_index",
+                "detector_final_round_flag",
+                "detector_boundary_flag",
+                "detector_checkerboard_class",
+                "detector_type",
+            ],
+            "detector_type_vocab": detector_semantics["detector_type_vocab"],
+            "notes": [
+                "checkerboard_class is the safe structural class for the current scaffold",
+                "detector_type remains unknown until checkerboard-to-X/Z mapping is validated locally",
+            ],
         },
         "instruction_histogram": _instruction_histogram(circuit),
         "artifacts": {
@@ -522,6 +572,11 @@ def save_family_dataset(
             "observable_flips_sha256": _sha256_array(obs_flips_u8),
             "logical_label_sha256": _sha256_array(logical_label_u8),
             "detector_coordinates_sha256": _sha256_array(detector_coords_f32),
+            "detector_time_index_sha256": _sha256_array(detector_time_index_i16),
+            "detector_final_round_flag_sha256": _sha256_array(detector_final_round_flag_u8),
+            "detector_boundary_flag_sha256": _sha256_array(detector_boundary_flag_u8),
+            "detector_checkerboard_class_sha256": _sha256_array(detector_checkerboard_class_u8),
+            "detector_type_sha256": _sha256_array(detector_type_u8),
         },
         "upstream_summary": built.upstream_summary,
         "generator": {
@@ -563,19 +618,19 @@ def main() -> None:
     args.out_root.mkdir(parents=True, exist_ok=True)
 
     manifest: dict[str, Any] = {
-    "schema_version": SCHEMA_VERSION,
-    "manifest_format": {
-        "family_dirs_base": "manifest_parent",
-        "path_style": "posix_relative",
-    },
-    "created_at_utc": _utc_now_iso(),
-    "distance": args.distance,
-    "rounds": args.rounds,
-    "basis": args.basis,
-    "variant": args.variant,
-    "shots": args.shots,
-    "requested_families": list(args.families),
-    "family_dirs": {},
+        "schema_version": SCHEMA_VERSION,
+        "manifest_format": {
+            "family_dirs_base": "manifest_parent",
+            "path_style": "posix_relative",
+        },
+        "created_at_utc": _utc_now_iso(),
+        "distance": args.distance,
+        "rounds": args.rounds,
+        "basis": args.basis,
+        "variant": args.variant,
+        "shots": args.shots,
+        "requested_families": list(args.families),
+        "family_dirs": {},
     }
 
     for family in args.families:
