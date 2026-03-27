@@ -261,9 +261,31 @@ def infer_stim_rotated_detector_semantics(
     ).astype(np.uint8)
 
     # Safe structural class for the current scaffold.
-    x2 = np.rint(2.0 * x).astype(np.int16)
-    y2 = np.rint(2.0 * y).astype(np.int16)
-    detector_checkerboard_class = (((x2 + y2) // 2) & 1).astype(np.uint8)
+    #
+    # Stim rotated-memory detector coordinates on this scaffold commonly live on
+    # an even lattice such as x,y in {0, 2, 4, 6, ...}. In that case, using
+    # round(2*x), round(2*y) collapses the parity and can incorrectly assign all
+    # detectors to the same checkerboard class.
+    #
+    # We therefore infer the checkerboard class from the integer lattice itself.
+    # For the current scaffold, x and y are expected to be integer-valued
+    # coordinates (often even integers). Dividing (x+y) by 2 before taking parity
+    # preserves the alternating plaquette structure on the observed lattice.
+    if np.isnan(x).any() or np.isnan(y).any():
+        raise ValueError(
+            "stim_rotated semantic inference requires valid detector x/y coordinates"
+        )
+
+    xi = np.rint(x).astype(np.int16)
+    yi = np.rint(y).astype(np.int16)
+
+    if not np.allclose(x, xi) or not np.allclose(y, yi):
+        raise ValueError(
+            "stim_rotated semantic inference currently expects integer-valued "
+            "detector x/y coordinates"
+        )
+
+    detector_checkerboard_class = (((xi + yi) // 2) & 1).astype(np.uint8)
 
     detector_type = np.zeros_like(detector_checkerboard_class, dtype=np.uint8)
     semantic_source = "stim_rotated_checkerboard_only"
