@@ -41,17 +41,10 @@ import time
 
 import numpy as np
 
-try:
-    import torch
-    import torch.nn as nn
-    import torch.optim as optim
-    from torch.utils.data import DataLoader, TensorDataset
-except ImportError:  # pragma: no cover - optional dependency at runtime
-    torch = None
-    nn = None
-    optim = None
-    DataLoader = None
-    TensorDataset = None
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
 
 
 ViewName = Literal["flat_event", "flat_semantic"]
