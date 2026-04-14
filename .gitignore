@@ -37,3 +37,5 @@ artifacts/**
 !artifacts/datasets/.gitkeep
 !artifacts/eval/
 !artifacts/eval/.gitkeep
+
+.ps1

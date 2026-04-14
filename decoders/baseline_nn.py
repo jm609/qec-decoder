@@ -275,7 +275,7 @@ def _as_int16_1d(arr: np.ndarray, *, name: str) -> np.ndarray:
 
 
 
-def _num_parameters(model: nn.Module) -> int: # fuck this yellow line
+def _num_parameters(model: nn.Module) -> int:
     return int(sum(p.numel() for p in model.parameters()))
 
 
@@ -512,7 +512,7 @@ class MLPDecoder(nn.Module):
             raise ValueError("hidden_dims must be non-empty")
 
         dims = [int(input_dim), *(int(h) for h in hidden_dims)]
-        layers: list[nn.Module] = [] # fuck this yellow line
+        layers: list[nn.Module] = []
         for in_dim, out_dim in zip(dims[:-1], dims[1:]):
             layers.append(nn.Linear(in_dim, out_dim))
             layers.append(nn.ReLU())
@@ -521,7 +521,7 @@ class MLPDecoder(nn.Module):
         layers.append(nn.Linear(dims[-1], 1))
         self.net = nn.Sequential(*layers)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor: # fuck this yellow line
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         logits = self.net(x)
         return logits.squeeze(-1)
 
@@ -673,7 +673,7 @@ def _set_random_seeds(seed: int) -> None:
 
 
 
-def _pick_device(device_arg: str) -> torch.device: # fuck this yellow line
+def _pick_device(device_arg: str) -> torch.device:
     _require_torch()
     if device_arg == "auto":
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
