@@ -38,4 +38,5 @@ artifacts/**
 !artifacts/eval/
 !artifacts/eval/.gitkeep
 
-.ps1
+*.ps1
+*.pdf
