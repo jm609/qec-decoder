@@ -465,26 +465,27 @@ d5 & \(2/6/0\) & 0.2500 & 0.2500 \\
 \end{tabular*}
 \end{table}
 
-\begin{table*}[!tbp]
+\begin{table}[!tbp]
 \caption{d5 seed별 선택 결과와 원본 유지 여부.}
 \label{tab:d5-fallback}
 \centering
 \scriptsize
-\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}clrrl}
+\setlength{\tabcolsep}{2.4pt}
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}clrrl}
 \toprule
-seed & 선택 경로 & selected delta & candidate delta & 해석 \\
+seed & 경로 & sel. \(\Delta\) & cand. \(\Delta\) & 해석 \\
 \midrule
 0 & 원본 유지 & \(+0.00\) pp & \(+0.00\) pp & 보정 미채택 \\
 1 & 원본 유지 & \(+0.00\) pp & \(+0.00\) pp & 보정 미채택 \\
 2 & 보정 채택 & \(+2.15\) pp & \(+2.15\) pp & 유익한 보정 \\
 3 & 보정 채택 & \(+2.34\) pp & \(+2.34\) pp & 유익한 보정 \\
-4 & 원본 유지 & \(+0.00\) pp & \(-0.78\) pp & 해로운 후보 차단 \\
+4 & 원본 유지 & \(+0.00\) pp & \(-0.78\) pp & 해로움 차단 \\
 5 & 원본 유지 & \(+0.00\) pp & \(+0.00\) pp & 보정 미채택 \\
-6 & 원본 유지 & \(+0.00\) pp & \(-1.17\) pp & 해로운 후보 차단 \\
+6 & 원본 유지 & \(+0.00\) pp & \(-1.17\) pp & 해로움 차단 \\
 7 & 원본 유지 & \(+0.00\) pp & \(+0.00\) pp & 보정 미채택 \\
 \bottomrule
 \end{tabular*}
-\end{table*}
+\end{table}
 
 Table~\ref{tab:d5-fallback}는 d5의 평균 향상이 seed 2와 seed 3에서 발생했음을
 보여준다. 반대로 seed 4와 seed 6의 candidate branch는 해로운 후보였지만,
@@ -572,14 +573,14 @@ policy를 검사했지만, 사전에 정의한 preserve/recover/block seed-level
 positive 차단을 동시에 만족하지 못했다. 따라서 d7의 다음 개선은 단순 threshold
 조정이 아니라 selector의 후보 정렬과 일반화 목표를 다시 설계하는 방향이어야 한다.
 
-\begin{figure*}[!tbp]
+\begin{figure}[!tbp]
 \centering
-\predecoderfigure{fig6_oracle_recovery_distribution}{\textwidth}
+\predecoderfigure{fig6_oracle_recovery_distribution}{\columnwidth}
 \caption{Seed-level oracle recovery. d3/d5는 oracle 기준 회복 가능성의 일부를 실제
 selected 결과로 회복하지만, d7 선택 모드는 candidate-oracle 기준의 회복 가능성을
 거의 활용하지 못한다.}
 \label{fig:oracle-recovery}
-\end{figure*}
+\end{figure}
 
 \section{논의}
 

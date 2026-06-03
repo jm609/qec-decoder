@@ -430,14 +430,15 @@ d5 & \(2/6/0\) & 0.2500 & 0.2500 \\
 \end{tabular*}
 \end{table}
 
-\begin{table*}[!tbp]
+\begin{table}[!tbp]
 \caption{D5 seed-level selected-mode fallback behavior.}
 \label{tab:d5-fallback}
 \centering
 \scriptsize
-\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}clrrl}
+\setlength{\tabcolsep}{2.4pt}
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}clrrl}
 \toprule
-seed & selected mode & selected delta & candidate delta & interpretation \\
+seed & mode & sel. \(\Delta\) & cand. \(\Delta\) & note \\
 \midrule
 0 & raw no-edit & \(+0.00\) pp & \(+0.00\) pp & fallback \\
 1 & raw no-edit & \(+0.00\) pp & \(+0.00\) pp & fallback \\
@@ -449,7 +450,7 @@ seed & selected mode & selected delta & candidate delta & interpretation \\
 7 & raw no-edit & \(+0.00\) pp & \(+0.00\) pp & fallback \\
 \bottomrule
 \end{tabular*}
-\end{table*}
+\end{table}
 
 Table~\ref{tab:d5-fallback} shows that the d5 mean gain comes from seeds 2 and
 3. Seeds 4 and 6 have harmful candidate branches, but selected mode blocks
@@ -537,14 +538,14 @@ pairwise top-k objectives also failed to preserve true positives while blocking
 false positives. The next d7 improvement requires a redesigned selector
 ranking/generalization objective rather than simple threshold tuning.
 
-\begin{figure*}[!tbp]
+\begin{figure}[!tbp]
 \centering
-\predecoderfigure{fig6_oracle_recovery_distribution}{\textwidth}
+\predecoderfigure{fig6_oracle_recovery_distribution}{\columnwidth}
 \caption{Seed-level oracle recovery. D3 and d5 convert part of the recoverable
 local-edit space into selected-mode gains, while d7 selected mode uses almost
 none of the recoverable candidate space.}
 \label{fig:oracle-recovery}
-\end{figure*}
+\end{figure}
 
 \section{Discussion}
 
