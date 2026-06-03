@@ -1,0 +1,13 @@
+# Core experiment dependencies for the surface-code predecoder project.
+# Recorded from the working Windows/Python environment on 2026-05-16.
+numpy==2.2.6
+torch==2.10.0
+stim==1.15.0
+PyMatching==2.3.1
+sinter==1.15.0
+scipy==1.15.3
+
+# Optional visualization/demo dependencies used by test.py.
+matplotlib==3.10.8
+networkx==3.4.2
+qiskit==2.3.0

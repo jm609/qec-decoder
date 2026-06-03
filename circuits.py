@@ -34,6 +34,8 @@ except ImportError:
     stim = None
 
 from config import CircuitConfig, ExperimentConfig
+from logical_frame import describe_logical_frame_structure
+from logical_targets import describe_logical_target_capability
 
 
 class MissingStimError(ImportError):
@@ -399,6 +401,16 @@ def export_dataset_metadata(
     circuit: Any,
 ) -> dict[str, Any]:
     circuit_cfg, experiment_cfg = _resolve_experiment_config(cfg)
+    logical_target_capability = describe_logical_target_capability(
+        basis=circuit_cfg.basis,
+        variant=circuit_cfg.variant,
+        num_observables=int(circuit.num_observables),
+    )
+    logical_frame_structure = describe_logical_frame_structure(
+        circuit=circuit,
+        basis=circuit_cfg.basis,
+        variant=circuit_cfg.variant,
+    )
 
     metadata: dict[str, Any] = {
         "distance": circuit_cfg.distance,
@@ -410,6 +422,8 @@ def export_dataset_metadata(
         "num_detectors": int(circuit.num_detectors),
         "num_observables": int(circuit.num_observables),
         "detector_coordinates": get_detector_coordinates(circuit),
+        "logical_target_capability": logical_target_capability.to_dict(),
+        "logical_frame_structure": logical_frame_structure.to_dict(),
     }
 
     if experiment_cfg is not None:

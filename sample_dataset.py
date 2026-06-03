@@ -28,6 +28,13 @@ Schema notes
 - v5 stored: detector_events, observable_flips, logical_label, detector_coordinates
 - v6 additionally stores: detector_time_index, detector_final_round_flag,
   detector_boundary_flag, detector_checkerboard_class, detector_type
+- v7 additionally stores: rectangular-lattice syndrome layout metadata
+  for geometry-aware CNN decoders
+- v8 additionally stores: logical-axis target metadata and logical_axis_flip,
+  making explicit which logical Pauli axis a basis-specific memory dataset
+  supervises
+- v9 additionally supports Bell-pair logical-frame readout mode with
+  logical_x_flip, logical_z_flip, and logical_class4 targets from one shot
 """
 
 from dataclasses import asdict, dataclass
@@ -62,6 +69,17 @@ from circuits import (
     export_detector_semantics,
     get_validated_checkerboard_type_map,
 )
+from dual_axis_manifest import build_dual_axis_manifest
+from geometry.rotated_rect import build_rectangular_syndrome_layout
+from logical_bell import (
+    BELL_PAIR_Z_READOUT_MODE,
+    build_bell_pair_z_readout_circuit,
+    derive_class4_targets_from_observable_flips,
+    logical_class4_histogram,
+)
+from logical_targets import (
+    describe_logical_target_capability,
+)
 from noise_si1000 import (
     build_si1000_memory_circuit,
     export_noisy_metadata as export_stage_a_metadata,
@@ -74,12 +92,16 @@ from noise_willowcore import (
 )
 
 
-SCHEMA_VERSION = "sample_dataset.v6"
+SCHEMA_VERSION = "sample_dataset.v9"
 SUPPORTED_FAMILIES = (
     "ideal",
     "stage_a_si1000",
     "stage_b_local",
     "stage_c_corr",
+)
+SUPPORTED_TARGET_MODES = (
+    "single_basis",
+    BELL_PAIR_Z_READOUT_MODE,
 )
 
 
@@ -206,8 +228,11 @@ def _family_output_dir(
     rounds: int,
     basis: str,
     variant: str,
+    target_mode: str,
 ) -> Path:
     tag = f"{family}__d{distance}_r{rounds}_{basis}_{variant}"
+    if target_mode != "single_basis":
+        tag += f"__tm_{target_mode}"
     return out_root / tag
 
 
@@ -388,6 +413,57 @@ def _derive_logical_label(obs_flips: np.ndarray) -> np.ndarray:
     return obs_flips[:, 0].astype(np.uint8, copy=False)
 
 
+def _derive_single_basis_targets(
+    obs_flips: np.ndarray,
+) -> dict[str, np.ndarray]:
+    logical_label = _derive_logical_label(obs_flips)
+    logical_axis_flip = logical_label.astype(np.uint8, copy=False)
+    return {
+        "logical_label": logical_label,
+        "logical_axis_flip": logical_axis_flip,
+    }
+
+
+def _derive_targets(
+    *,
+    obs_flips: np.ndarray,
+    basis: str,
+    target_mode: str,
+) -> tuple[dict[str, np.ndarray], dict[str, Any] | None]:
+    if target_mode == "single_basis":
+        return _derive_single_basis_targets(obs_flips), None
+
+    if target_mode == BELL_PAIR_Z_READOUT_MODE:
+        if basis != "z":
+            raise ValueError(
+                f"{BELL_PAIR_Z_READOUT_MODE!r} currently requires basis='z', got {basis!r}."
+            )
+        targets = derive_class4_targets_from_observable_flips(obs_flips)
+        logical_x_flip = targets["logical_x_flip"].astype(np.uint8, copy=False)
+        return (
+            {
+                "logical_label": logical_x_flip,
+                "logical_axis_flip": logical_x_flip,
+                "logical_x_flip": logical_x_flip,
+                "logical_z_flip": targets["logical_z_flip"].astype(np.uint8, copy=False),
+                "logical_class4": targets["logical_class4"].astype(np.uint8, copy=False),
+            },
+            {
+                "logical_x_flip_definition": "observable_flips[:, 1] from the ZZ Bell-stabilizer flip",
+                "logical_z_flip_definition": "observable_flips[:, 0] from the XX Bell-stabilizer flip",
+                "logical_class4_definition": "logical_x_flip + 2 * logical_z_flip with 0=I, 1=X, 2=Z, 3=Y",
+                "logical_class4_mapping": {
+                    "0": "I",
+                    "1": "X",
+                    "2": "Z",
+                    "3": "Y",
+                },
+            },
+        )
+
+    raise ValueError(f"Unsupported target_mode: {target_mode!r}")
+
+
 def save_family_dataset(
     *,
     out_root: Path,
@@ -396,6 +472,7 @@ def save_family_dataset(
     rounds: int,
     basis: str,
     variant: str,
+    target_mode: str,
     physical_error_rate: float,
     shots: int,
     seed: int | None,
@@ -418,6 +495,7 @@ def save_family_dataset(
         rounds=rounds,
         basis=basis,
         variant=variant,
+        target_mode=target_mode,
     )
     if family_dir.exists():
         if not overwrite:
@@ -428,8 +506,35 @@ def save_family_dataset(
     family_dir.mkdir(parents=True, exist_ok=False)
 
     circuit = built.circuit
+    logical_bell_readout: dict[str, Any] | None = None
+    if target_mode == BELL_PAIR_Z_READOUT_MODE:
+        circuit, bell_readout = build_bell_pair_z_readout_circuit(
+            circuit=circuit,
+            basis=basis,
+            variant=variant,
+        )
+        logical_bell_readout = bell_readout.to_dict()
+
     det_events, obs_flips = _sample_arrays(circuit, shots=shots, seed=seed)
-    logical_label = _derive_logical_label(obs_flips)
+    derived_targets, derived_target_metadata = _derive_targets(
+        obs_flips=obs_flips,
+        basis=basis,
+        target_mode=target_mode,
+    )
+    logical_label = derived_targets["logical_label"]
+    logical_axis_flip = derived_targets["logical_axis_flip"]
+    logical_target_capability = describe_logical_target_capability(
+        basis=basis,
+        variant=variant,
+        num_observables=int(circuit.num_observables),
+        mode=(
+            "single_basis_memory"
+            if target_mode == "single_basis"
+            else BELL_PAIR_Z_READOUT_MODE
+        ),
+    )
+    logical_axis_target_name = logical_target_capability.logical_axis_target_name
+    supervised_logical_error_axis = logical_target_capability.supervised_logical_error_axis
 
     detector_coords = get_detector_coordinate_array(circuit, coord_dim=3)
     detector_semantics = export_detector_semantics(
@@ -445,6 +550,22 @@ def save_family_dataset(
     det_events_u8 = det_events.astype(np.uint8, copy=False)
     obs_flips_u8 = obs_flips.astype(np.uint8, copy=False)
     logical_label_u8 = logical_label.astype(np.uint8, copy=False)
+    logical_axis_flip_u8 = logical_axis_flip.astype(np.uint8, copy=False)
+    logical_x_flip_u8 = (
+        derived_targets["logical_x_flip"].astype(np.uint8, copy=False)
+        if "logical_x_flip" in derived_targets
+        else None
+    )
+    logical_z_flip_u8 = (
+        derived_targets["logical_z_flip"].astype(np.uint8, copy=False)
+        if "logical_z_flip" in derived_targets
+        else None
+    )
+    logical_class4_u8 = (
+        derived_targets["logical_class4"].astype(np.uint8, copy=False)
+        if "logical_class4" in derived_targets
+        else None
+    )
     detector_coords_f32 = detector_coords.astype(np.float32, copy=False)
 
     detector_time_index_i16 = detector_semantics["detector_time_index"].astype(np.int16, copy=False)
@@ -453,6 +574,25 @@ def save_family_dataset(
     detector_checkerboard_class_u8 = detector_semantics["detector_checkerboard_class"].astype(np.uint8, copy=False)
     detector_type_u8 = detector_semantics["detector_type"].astype(np.uint8, copy=False)
 
+    rectangular_layout = build_rectangular_syndrome_layout(
+        {
+            "detector_coordinates": detector_coords_f32,
+            "detector_time_index": detector_time_index_i16,
+            "detector_final_round_flag": detector_final_round_flag_u8,
+            "detector_boundary_flag": detector_boundary_flag_u8,
+            "detector_checkerboard_class": detector_checkerboard_class_u8,
+            "detector_type": detector_type_u8,
+        }
+    )
+    rect_row_index_i16 = rectangular_layout.row_index_by_detector.astype(np.int16, copy=False)
+    rect_col_index_i16 = rectangular_layout.col_index_by_detector.astype(np.int16, copy=False)
+    rect_detector_index_i32 = rectangular_layout.detector_index_volume.astype(np.int32, copy=False)
+    rect_valid_mask_u8 = rectangular_layout.valid_mask.astype(np.uint8, copy=False)
+    rect_checkerboard_volume_u8 = rectangular_layout.checkerboard_volume.astype(np.uint8, copy=False)
+    rect_detector_type_volume_u8 = rectangular_layout.detector_type_volume.astype(np.uint8, copy=False)
+    rect_boundary_volume_u8 = rectangular_layout.boundary_volume.astype(np.uint8, copy=False)
+    rect_final_round_volume_u8 = rectangular_layout.final_round_volume.astype(np.uint8, copy=False)
+
     npz_path = family_dir / "samples.npz"
     circuit_path = family_dir / "circuit.stim"
     dem_path = family_dir / "detector_error_model.dem"
@@ -460,18 +600,34 @@ def save_family_dataset(
     upstream_metadata_path = family_dir / "upstream_metadata.json"
     config_path = family_dir / "config.json"
 
-    np.savez_compressed(
-        npz_path,
-        detector_events=det_events_u8,
-        observable_flips=obs_flips_u8,
-        logical_label=logical_label_u8,
-        detector_coordinates=detector_coords_f32,
-        detector_time_index=detector_time_index_i16,
-        detector_final_round_flag=detector_final_round_flag_u8,
-        detector_boundary_flag=detector_boundary_flag_u8,
-        detector_checkerboard_class=detector_checkerboard_class_u8,
-        detector_type=detector_type_u8,
-    )
+    npz_payload: dict[str, np.ndarray] = {
+        "detector_events": det_events_u8,
+        "observable_flips": obs_flips_u8,
+        "logical_label": logical_label_u8,
+        "logical_axis_flip": logical_axis_flip_u8,
+        "detector_coordinates": detector_coords_f32,
+        "detector_time_index": detector_time_index_i16,
+        "detector_final_round_flag": detector_final_round_flag_u8,
+        "detector_boundary_flag": detector_boundary_flag_u8,
+        "detector_checkerboard_class": detector_checkerboard_class_u8,
+        "detector_type": detector_type_u8,
+        "rect_row_index_by_detector": rect_row_index_i16,
+        "rect_col_index_by_detector": rect_col_index_i16,
+        "rect_detector_index_volume": rect_detector_index_i32,
+        "rect_valid_mask": rect_valid_mask_u8,
+        "rect_checkerboard_class_volume": rect_checkerboard_volume_u8,
+        "rect_detector_type_volume": rect_detector_type_volume_u8,
+        "rect_boundary_volume": rect_boundary_volume_u8,
+        "rect_final_round_volume": rect_final_round_volume_u8,
+    }
+    if logical_x_flip_u8 is not None:
+        npz_payload["logical_x_flip"] = logical_x_flip_u8
+    if logical_z_flip_u8 is not None:
+        npz_payload["logical_z_flip"] = logical_z_flip_u8
+    if logical_class4_u8 is not None:
+        npz_payload["logical_class4"] = logical_class4_u8
+
+    np.savez_compressed(npz_path, **npz_payload)
     circuit_path.write_text(circuit_text, encoding="utf-8")
     dem_path.write_text(dem_text, encoding="utf-8")
     _write_json(upstream_metadata_path, built.upstream_metadata)
@@ -482,6 +638,142 @@ def save_family_dataset(
     else:
         config_obj = asdict(cfg_obj)
     _write_json(config_path, {"config": config_obj})
+
+    sampling_metadata: dict[str, Any] = {
+        "shots": int(shots),
+        "seed": seed,
+        "target_mode": target_mode,
+        "stored_detector_events_dtype": "uint8",
+        "stored_observable_flips_dtype": "uint8",
+        "stored_logical_label_dtype": "uint8",
+        "stored_logical_axis_flip_dtype": "uint8",
+        "stored_detector_coordinates_dtype": "float32",
+        "stored_detector_events_shape": list(det_events_u8.shape),
+        "stored_observable_flips_shape": list(obs_flips_u8.shape),
+        "stored_logical_label_shape": list(logical_label_u8.shape),
+        "stored_logical_axis_flip_shape": list(logical_axis_flip_u8.shape),
+        "stored_detector_coordinates_shape": list(detector_coords_f32.shape),
+        "stored_detector_time_index_dtype": "int16",
+        "stored_detector_final_round_flag_dtype": "uint8",
+        "stored_detector_boundary_flag_dtype": "uint8",
+        "stored_detector_checkerboard_class_dtype": "uint8",
+        "stored_detector_type_dtype": "uint8",
+        "stored_detector_time_index_shape": list(detector_time_index_i16.shape),
+        "stored_detector_final_round_flag_shape": list(detector_final_round_flag_u8.shape),
+        "stored_detector_boundary_flag_shape": list(detector_boundary_flag_u8.shape),
+        "stored_detector_checkerboard_class_shape": list(detector_checkerboard_class_u8.shape),
+        "stored_detector_type_shape": list(detector_type_u8.shape),
+        "stored_rect_row_index_by_detector_dtype": "int16",
+        "stored_rect_col_index_by_detector_dtype": "int16",
+        "stored_rect_detector_index_volume_dtype": "int32",
+        "stored_rect_valid_mask_dtype": "uint8",
+        "stored_rect_checkerboard_class_volume_dtype": "uint8",
+        "stored_rect_detector_type_volume_dtype": "uint8",
+        "stored_rect_boundary_volume_dtype": "uint8",
+        "stored_rect_final_round_volume_dtype": "uint8",
+        "stored_rect_row_index_by_detector_shape": list(rect_row_index_i16.shape),
+        "stored_rect_col_index_by_detector_shape": list(rect_col_index_i16.shape),
+        "stored_rect_detector_index_volume_shape": list(rect_detector_index_i32.shape),
+        "stored_rect_valid_mask_shape": list(rect_valid_mask_u8.shape),
+        "stored_rect_checkerboard_class_volume_shape": list(rect_checkerboard_volume_u8.shape),
+        "stored_rect_detector_type_volume_shape": list(rect_detector_type_volume_u8.shape),
+        "stored_rect_boundary_volume_shape": list(rect_boundary_volume_u8.shape),
+        "stored_rect_final_round_volume_shape": list(rect_final_round_volume_u8.shape),
+    }
+    if target_mode == "single_basis":
+        sampling_metadata["logical_label_definition"] = (
+            "observable_flips[:, 0] when num_observables == 1"
+        )
+        sampling_metadata["logical_axis_flip_definition"] = (
+            "basis-aware alias of logical_label for memory experiments with one observable"
+        )
+    else:
+        sampling_metadata["logical_label_definition"] = (
+            "legacy alias of logical_x_flip for backward compatibility"
+        )
+        sampling_metadata["logical_axis_flip_definition"] = (
+            "legacy alias of logical_x_flip for backward compatibility"
+        )
+    if logical_x_flip_u8 is not None:
+        sampling_metadata["stored_logical_x_flip_dtype"] = "uint8"
+        sampling_metadata["stored_logical_x_flip_shape"] = list(logical_x_flip_u8.shape)
+    if logical_z_flip_u8 is not None:
+        sampling_metadata["stored_logical_z_flip_dtype"] = "uint8"
+        sampling_metadata["stored_logical_z_flip_shape"] = list(logical_z_flip_u8.shape)
+    if logical_class4_u8 is not None:
+        sampling_metadata["stored_logical_class4_dtype"] = "uint8"
+        sampling_metadata["stored_logical_class4_shape"] = list(logical_class4_u8.shape)
+    if derived_target_metadata is not None:
+        sampling_metadata.update(derived_target_metadata)
+
+    target_notes = [
+        "logical_label remains stored for backward compatibility with existing readers",
+        "logical_axis_flip remains stored for backward compatibility with axis-wise decoders",
+    ]
+    if target_mode == "single_basis":
+        logical_target_kind = "binary_observable_proxy"
+        target_notes = [
+            "current Stim generated memory circuits expose one observable per basis",
+            "logical_label remains observable_flips[:, 0] for backward compatibility",
+            "logical_axis_flip is the stable basis-aware alias for that supervised axis",
+            "the directly measured logical observable matches the experiment basis",
+            "the supervised logical error axis is the conjugate axis inferred from flips of that observable",
+        ] + target_notes
+        logical_frame_structure = built.upstream_metadata.get("logical_frame_structure")
+    else:
+        logical_target_kind = "per_shot_logical_class4"
+        target_notes = [
+            "this dataset uses a Bell-pair logical readout path with an added noiseless reference qubit",
+            "observable_flips[:, 0] equals logical_z_flip and observable_flips[:, 1] equals logical_x_flip",
+            "logical_class4 is stored explicitly and uses 0=I, 1=X, 2=Z, 3=Y",
+            "logical_label and logical_axis_flip are legacy aliases of logical_x_flip",
+        ] + target_notes
+        logical_frame_structure = logical_bell_readout
+
+    qc_stats: dict[str, Any] = {
+        "detector_event_fraction": float(det_events_u8.mean()),
+        "logical_flip_fraction": float(logical_label_u8.mean()),
+        "observable_flip_fraction_per_observable": [
+            float(obs_flips_u8[:, k].mean()) for k in range(obs_flips_u8.shape[1])
+        ],
+        "avg_detector_weight_per_shot": float(det_events_u8.sum(axis=1).mean()),
+        "avg_observable_weight_per_shot": float(obs_flips_u8.sum(axis=1).mean()),
+    }
+    if logical_x_flip_u8 is not None:
+        qc_stats["logical_x_flip_fraction"] = float(logical_x_flip_u8.mean())
+    if logical_z_flip_u8 is not None:
+        qc_stats["logical_z_flip_fraction"] = float(logical_z_flip_u8.mean())
+    if logical_class4_u8 is not None:
+        qc_stats["logical_class4_histogram"] = logical_class4_histogram(logical_class4_u8)
+
+    hashes: dict[str, Any] = {
+        "circuit_sha256": _sha256_text(circuit_text),
+        "dem_sha256": _sha256_text(dem_text),
+        "detector_events_sha256": _sha256_array(det_events_u8),
+        "observable_flips_sha256": _sha256_array(obs_flips_u8),
+        "logical_label_sha256": _sha256_array(logical_label_u8),
+        "logical_axis_flip_sha256": _sha256_array(logical_axis_flip_u8),
+        "detector_coordinates_sha256": _sha256_array(detector_coords_f32),
+        "detector_time_index_sha256": _sha256_array(detector_time_index_i16),
+        "detector_final_round_flag_sha256": _sha256_array(detector_final_round_flag_u8),
+        "detector_boundary_flag_sha256": _sha256_array(detector_boundary_flag_u8),
+        "detector_checkerboard_class_sha256": _sha256_array(detector_checkerboard_class_u8),
+        "detector_type_sha256": _sha256_array(detector_type_u8),
+        "rect_row_index_by_detector_sha256": _sha256_array(rect_row_index_i16),
+        "rect_col_index_by_detector_sha256": _sha256_array(rect_col_index_i16),
+        "rect_detector_index_volume_sha256": _sha256_array(rect_detector_index_i32),
+        "rect_valid_mask_sha256": _sha256_array(rect_valid_mask_u8),
+        "rect_checkerboard_class_volume_sha256": _sha256_array(rect_checkerboard_volume_u8),
+        "rect_detector_type_volume_sha256": _sha256_array(rect_detector_type_volume_u8),
+        "rect_boundary_volume_sha256": _sha256_array(rect_boundary_volume_u8),
+        "rect_final_round_volume_sha256": _sha256_array(rect_final_round_volume_u8),
+    }
+    if logical_x_flip_u8 is not None:
+        hashes["logical_x_flip_sha256"] = _sha256_array(logical_x_flip_u8)
+    if logical_z_flip_u8 is not None:
+        hashes["logical_z_flip_sha256"] = _sha256_array(logical_z_flip_u8)
+    if logical_class4_u8 is not None:
+        hashes["logical_class4_sha256"] = _sha256_array(logical_class4_u8)
 
     metadata: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -503,38 +795,27 @@ def save_family_dataset(
             "num_detectors": int(circuit.num_detectors),
             "num_observables": int(circuit.num_observables),
         },
-        "sampling": {
-            "shots": int(shots),
-            "seed": seed,
-            "stored_detector_events_dtype": "uint8",
-            "stored_observable_flips_dtype": "uint8",
-            "stored_logical_label_dtype": "uint8",
-            "stored_detector_coordinates_dtype": "float32",
-            "stored_detector_events_shape": list(det_events_u8.shape),
-            "stored_observable_flips_shape": list(obs_flips_u8.shape),
-            "stored_logical_label_shape": list(logical_label_u8.shape),
-            "stored_detector_coordinates_shape": list(detector_coords_f32.shape),
-            "logical_label_definition": "observable_flips[:, 0] when num_observables == 1",
-            "stored_detector_time_index_dtype": "int16",
-            "stored_detector_final_round_flag_dtype": "uint8",
-            "stored_detector_boundary_flag_dtype": "uint8",
-            "stored_detector_checkerboard_class_dtype": "uint8",
-            "stored_detector_type_dtype": "uint8",
-            "stored_detector_time_index_shape": list(detector_time_index_i16.shape),
-            "stored_detector_final_round_flag_shape": list(detector_final_round_flag_u8.shape),
-            "stored_detector_boundary_flag_shape": list(detector_boundary_flag_u8.shape),
-            "stored_detector_checkerboard_class_shape": list(detector_checkerboard_class_u8.shape),
-            "stored_detector_type_shape": list(detector_type_u8.shape),
+        "sampling": sampling_metadata,
+        "targets": {
+            "logical_target_kind": logical_target_kind,
+            "target_mode": target_mode,
+            "available_targets": list(logical_target_capability.available_targets),
+            "logical_axis_flip_name": logical_axis_target_name,
+            "supervised_logical_error_axis": supervised_logical_error_axis,
+            "directly_measured_logical_observable": (
+                logical_target_capability.directly_measured_logical_observable
+            ),
+            "observable_basis": basis,
+            "equivalent_target_aliases": {
+                logical_axis_target_name: "logical_axis_flip",
+            },
+            "planned_future_targets": list(logical_target_capability.planned_future_targets),
+            "notes": target_notes + list(logical_target_capability.notes),
         },
-        "qc_stats": {
-            "detector_event_fraction": float(det_events_u8.mean()),
-            "logical_flip_fraction": float(logical_label_u8.mean()),
-            "observable_flip_fraction_per_observable": [
-                float(obs_flips_u8[:, k].mean()) for k in range(obs_flips_u8.shape[1])
-            ],
-            "avg_detector_weight_per_shot": float(det_events_u8.sum(axis=1).mean()),
-            "avg_observable_weight_per_shot": float(obs_flips_u8.sum(axis=1).mean()),
-        },
+        "logical_target_capability": logical_target_capability.to_dict(),
+        "logical_frame_structure": logical_frame_structure,
+        "logical_bell_pair_readout": logical_bell_readout,
+        "qc_stats": qc_stats,
         "dem": {
             "kwargs": built.dem_kwargs,
             "num_detectors": int(dem.num_detectors),
@@ -558,6 +839,26 @@ def save_family_dataset(
                 "validated mapping for the current scaffold: class 0 -> z_check, class 1 -> x_check",
             ],
         },
+        "rectangular_syndrome_layout": {
+            "schema_version": "rotated_rectangular_layout.v1",
+            "stored_keys": [
+                "rect_row_index_by_detector",
+                "rect_col_index_by_detector",
+                "rect_detector_index_volume",
+                "rect_valid_mask",
+                "rect_checkerboard_class_volume",
+                "rect_detector_type_volume",
+                "rect_boundary_volume",
+                "rect_final_round_volume",
+            ],
+            "recommended_incoherent_fill_value": -0.5,
+            "layout_summary": rectangular_layout.metadata_summary,
+            "notes": [
+                "rectangular indices are derived from detector coordinates on the even lattice",
+                "missing cells in the rectangle should be filled with an incoherent value for CNN inputs",
+                "this layout preserves the 2-D surface-code structure across time without flattening detectors",
+            ],
+        },
         "instruction_histogram": _instruction_histogram(circuit),
         "artifacts": {
             "samples_npz": npz_path.name,
@@ -567,19 +868,7 @@ def save_family_dataset(
             "upstream_metadata_json": upstream_metadata_path.name,
             "config_json": config_path.name,
         },
-        "hashes": {
-            "circuit_sha256": _sha256_text(circuit_text),
-            "dem_sha256": _sha256_text(dem_text),
-            "detector_events_sha256": _sha256_array(det_events_u8),
-            "observable_flips_sha256": _sha256_array(obs_flips_u8),
-            "logical_label_sha256": _sha256_array(logical_label_u8),
-            "detector_coordinates_sha256": _sha256_array(detector_coords_f32),
-            "detector_time_index_sha256": _sha256_array(detector_time_index_i16),
-            "detector_final_round_flag_sha256": _sha256_array(detector_final_round_flag_u8),
-            "detector_boundary_flag_sha256": _sha256_array(detector_boundary_flag_u8),
-            "detector_checkerboard_class_sha256": _sha256_array(detector_checkerboard_class_u8),
-            "detector_type_sha256": _sha256_array(detector_type_u8),
-        },
+        "hashes": hashes,
         "upstream_summary": built.upstream_summary,
         "generator": {
             "script": "sample_dataset.py",
@@ -592,6 +881,79 @@ def save_family_dataset(
     return family_dir
 
 
+def _build_manifest_record(
+    *,
+    basis: str,
+    distance: int,
+    rounds: int,
+    variant: str,
+    target_mode: str,
+    shots: int,
+    families: list[str],
+) -> dict[str, Any]:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "manifest_format": {
+            "family_dirs_base": "manifest_parent",
+            "path_style": "posix_relative",
+        },
+        "created_at_utc": _utc_now_iso(),
+        "distance": distance,
+        "rounds": rounds,
+        "basis": basis,
+        "variant": variant,
+        "target_mode": target_mode,
+        "shots": shots,
+        "requested_families": list(families),
+        "family_dirs": {},
+    }
+
+
+def _generate_manifest_for_basis(
+    *,
+    out_root: Path,
+    distance: int,
+    rounds: int,
+    basis: str,
+    variant: str,
+    target_mode: str,
+    physical_error_rate: float,
+    shots: int,
+    families: list[str],
+    seed: int | None,
+    overwrite: bool,
+    manifest_filename: str,
+) -> tuple[Path, dict[str, Any]]:
+    manifest = _build_manifest_record(
+        basis=basis,
+        distance=distance,
+        rounds=rounds,
+        variant=variant,
+        target_mode=target_mode,
+        shots=shots,
+        families=families,
+    )
+    for family in families:
+        family_dir = save_family_dataset(
+            out_root=out_root,
+            family=family,
+            distance=distance,
+            rounds=rounds,
+            basis=basis,
+            variant=variant,
+            target_mode=target_mode,
+            physical_error_rate=physical_error_rate,
+            shots=shots,
+            seed=seed,
+            overwrite=overwrite,
+        )
+        manifest["family_dirs"][family] = _path_for_manifest(family_dir, out_root)
+
+    manifest_path = out_root / manifest_filename
+    _write_json(manifest_path, manifest)
+    return manifest_path, manifest
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate detector-event datasets for ideal / Stage A / Stage B / Stage C."
@@ -599,8 +961,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-root", type=Path, required=True)
     parser.add_argument("--distance", type=int, required=True)
     parser.add_argument("--rounds", type=int, required=True)
-    parser.add_argument("--basis", choices=["x", "z"], required=True)
+    parser.add_argument("--basis", choices=["x", "z", "both"], required=True)
     parser.add_argument("--variant", choices=["stim_rotated", "xzzx"], default="stim_rotated")
+    parser.add_argument(
+        "--target-mode",
+        choices=list(SUPPORTED_TARGET_MODES),
+        default="single_basis",
+    )
     parser.add_argument("--p", type=float, default=0.0015, help="Base physical error rate for SI1000-derived families")
     parser.add_argument("--shots", type=int, required=True)
     parser.add_argument(
@@ -617,41 +984,101 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     _require_stim()
     args = parse_args()
+    if args.target_mode == BELL_PAIR_Z_READOUT_MODE and args.basis != "z":
+        raise ValueError(
+            f"{BELL_PAIR_Z_READOUT_MODE!r} currently supports only --basis z."
+        )
+    if args.target_mode != "single_basis" and args.basis == "both":
+        raise ValueError(
+            "--basis both is currently only supported with --target-mode single_basis."
+        )
     args.out_root.mkdir(parents=True, exist_ok=True)
-
-    manifest: dict[str, Any] = {
-        "schema_version": SCHEMA_VERSION,
-        "manifest_format": {
-            "family_dirs_base": "manifest_parent",
-            "path_style": "posix_relative",
-        },
-        "created_at_utc": _utc_now_iso(),
-        "distance": args.distance,
-        "rounds": args.rounds,
-        "basis": args.basis,
-        "variant": args.variant,
-        "shots": args.shots,
-        "requested_families": list(args.families),
-        "family_dirs": {},
-    }
-
-    for family in args.families:
-        family_dir = save_family_dataset(
+    if args.basis in {"x", "z"}:
+        manifest_path, manifest = _generate_manifest_for_basis(
             out_root=args.out_root,
-            family=family,
             distance=args.distance,
             rounds=args.rounds,
             basis=args.basis,
             variant=args.variant,
+            target_mode=args.target_mode,
             physical_error_rate=args.p,
             shots=args.shots,
+            families=list(args.families),
             seed=args.seed,
             overwrite=args.overwrite,
+            manifest_filename="manifest.json",
         )
-        manifest["family_dirs"][family] = _path_for_manifest(family_dir, args.out_root)
+        summary = {
+            "mode": "single_basis",
+            "target_mode": args.target_mode,
+            "manifest_path": manifest_path.as_posix(),
+            "manifest": manifest,
+        }
+        print(json.dumps(summary, indent=2, ensure_ascii=False))
+        return
 
-    _write_json(args.out_root / "manifest.json", manifest)
-    print(json.dumps(manifest, indent=2, ensure_ascii=False))
+    x_manifest_path, x_manifest = _generate_manifest_for_basis(
+        out_root=args.out_root,
+        distance=args.distance,
+        rounds=args.rounds,
+        basis="x",
+        variant=args.variant,
+        target_mode=args.target_mode,
+        physical_error_rate=args.p,
+        shots=args.shots,
+        families=list(args.families),
+        seed=args.seed,
+        overwrite=args.overwrite,
+        manifest_filename="manifest_x.json",
+    )
+    z_manifest_path, z_manifest = _generate_manifest_for_basis(
+        out_root=args.out_root,
+        distance=args.distance,
+        rounds=args.rounds,
+        basis="z",
+        variant=args.variant,
+        target_mode=args.target_mode,
+        physical_error_rate=args.p,
+        shots=args.shots,
+        families=list(args.families),
+        seed=args.seed,
+        overwrite=args.overwrite,
+        manifest_filename="manifest_z.json",
+    )
+    dual_axis = build_dual_axis_manifest(
+        x_manifest_path=x_manifest_path,
+        z_manifest_path=z_manifest_path,
+    )
+    dual_axis_path = args.out_root / "dual_axis_manifest.json"
+    _write_json(dual_axis_path, dual_axis)
+
+    bundle_summary = {
+        "schema_version": "sample_dataset.multi_basis_bundle.v1",
+        "created_at_utc": _utc_now_iso(),
+        "mode": "paired_single_basis_memory",
+        "distance": args.distance,
+        "rounds": args.rounds,
+        "variant": args.variant,
+        "target_mode": args.target_mode,
+        "shots": args.shots,
+        "requested_families": list(args.families),
+        "manifest_x_path": x_manifest_path.as_posix(),
+        "manifest_z_path": z_manifest_path.as_posix(),
+        "dual_axis_manifest_path": dual_axis_path.as_posix(),
+        "supports_per_shot_logical_class4": False,
+        "notes": [
+            "basis=both generates two basis-specific manifests plus a dual-axis pairing manifest.",
+            "This opens a first-class axis-wise target path directly from sample_dataset.py.",
+            "The paired x/z datasets still come from separate sampled shots and are not true per-shot logical_class4 labels.",
+        ],
+        "manifests": {
+            "x": x_manifest,
+            "z": z_manifest,
+            "dual_axis": dual_axis,
+        },
+    }
+    _write_json(args.out_root / "basis_bundle.json", bundle_summary)
+    print(json.dumps(bundle_summary, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

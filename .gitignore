@@ -1,5 +1,6 @@
 # Python cache / build
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *$py.class
 
@@ -23,6 +24,7 @@ venv/
 models/saved_weights/
 
 # Notebook / editor / OS
+.claude/
 .ipynb_checkpoints/
 .DS_Store
 Thumbs.db
@@ -40,3 +42,20 @@ artifacts/**
 
 *.ps1
 *.pdf
+*.zip
+*_발표대본.txt
+
+# LaTeX build outputs
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.lof
+*.log
+*.lot
+*.out
+*.run.xml
+*.synctex.gz
+*.toc

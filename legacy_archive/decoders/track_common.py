@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+"""
+track_common.py
+
+Legacy shared helper module for the older track-based binary decoder line.
+Kept only while baseline_tracknn.py and baseline_trackformer.py remain for
+historical comparison.
+"""
+
 from dataclasses import dataclass
 from typing import Any
 import math

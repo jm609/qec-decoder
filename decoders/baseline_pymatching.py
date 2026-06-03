@@ -49,7 +49,7 @@ except ImportError:  # pragma: no cover - optional dependency at runtime
     stim = None
 
 
-SCHEMA_VERSION = "baseline_pymatching.eval.v1"
+SCHEMA_VERSION = "baseline_pymatching.eval.v2"
 
 
 class MissingPyMatchingError(ImportError):
@@ -170,6 +170,34 @@ def _estimate_ler_per_cycle(frame_error_rate: float, rounds: int | None) -> floa
     if fidelity < 0.0:
         return None
     return 0.5 * (1.0 - fidelity ** (1.0 / rounds))
+
+
+def _logical_class4_from_observable_flips(observable_flips: np.ndarray) -> np.ndarray:
+    obs = _as_uint8_2d(observable_flips, name="observable_flips")
+    if obs.shape[1] != 2:
+        raise ValueError(
+            "logical_class4 requires exactly two observables ordered as [logical_z_flip, logical_x_flip]."
+        )
+    logical_z_flip = obs[:, 0].astype(np.uint8, copy=False)
+    logical_x_flip = obs[:, 1].astype(np.uint8, copy=False)
+    return (
+        logical_x_flip.astype(np.uint8, copy=False)
+        + (logical_z_flip.astype(np.uint8, copy=False) << 1)
+    ).astype(np.uint8, copy=False)
+
+
+def _confusion_matrix_multiclass(
+    target: np.ndarray,
+    pred: np.ndarray,
+    *,
+    num_classes: int,
+) -> list[list[int]]:
+    target_i = np.asarray(target, dtype=np.int64).reshape(-1)
+    pred_i = np.asarray(pred, dtype=np.int64).reshape(-1)
+    confusion = np.zeros((num_classes, num_classes), dtype=np.int64)
+    for true_class, pred_class in zip(target_i, pred_i, strict=False):
+        confusion[int(true_class), int(pred_class)] += 1
+    return confusion.tolist()
 
 
 def _normalise_predictions(pred: np.ndarray, *, num_shots: int) -> np.ndarray:
@@ -338,6 +366,21 @@ def evaluate_family_dir(
     detector_events = _as_uint8_2d(arrays["detector_events"], name="detector_events")
     observable_flips = _as_uint8_2d(arrays["observable_flips"], name="observable_flips")
     logical_label = _as_uint8_1d(arrays["logical_label"], name="logical_label")
+    logical_x_flip = (
+        _as_uint8_1d(arrays["logical_x_flip"], name="logical_x_flip")
+        if "logical_x_flip" in arrays
+        else None
+    )
+    logical_z_flip = (
+        _as_uint8_1d(arrays["logical_z_flip"], name="logical_z_flip")
+        if "logical_z_flip" in arrays
+        else None
+    )
+    logical_class4 = (
+        _as_uint8_1d(arrays["logical_class4"], name="logical_class4")
+        if "logical_class4" in arrays
+        else None
+    )
 
     if detector_events.shape[0] != observable_flips.shape[0]:
         raise ValueError(
@@ -361,6 +404,12 @@ def evaluate_family_dir(
         detector_events = detector_events[:max_shots]
         observable_flips = observable_flips[:max_shots]
         logical_label = logical_label[:max_shots]
+        if logical_x_flip is not None:
+            logical_x_flip = logical_x_flip[:max_shots]
+        if logical_z_flip is not None:
+            logical_z_flip = logical_z_flip[:max_shots]
+        if logical_class4 is not None:
+            logical_class4 = logical_class4[:max_shots]
 
     matching, matching_info = _build_matching(
         dem_path=artifacts.dem_path,
@@ -387,6 +436,11 @@ def evaluate_family_dir(
     pred_logical_label: np.ndarray | None = None
     label_error_rate: float | None = None
     confusion: dict[str, int] | None = None
+    logical_x_error_rate: float | None = None
+    logical_z_error_rate: float | None = None
+    logical_class4_error_rate: float | None = None
+    logical_class4_accuracy: float | None = None
+    logical_class4_confusion: list[list[int]] | None = None
     if predicted_observables.shape[1] == 1:
         pred_logical_label = predicted_observables[:, 0].astype(np.uint8, copy=False)
         label_error_rate = float(np.mean(pred_logical_label != logical_label))
@@ -395,6 +449,22 @@ def evaluate_family_dir(
         fn = int(np.sum((pred_logical_label == 0) & (logical_label == 1)))
         tp = int(np.sum((pred_logical_label == 1) & (logical_label == 1)))
         confusion = {"tn": tn, "fp": fp, "fn": fn, "tp": tp}
+    elif predicted_observables.shape[1] == 2:
+        pred_logical_z_flip = predicted_observables[:, 0].astype(np.uint8, copy=False)
+        pred_logical_x_flip = predicted_observables[:, 1].astype(np.uint8, copy=False)
+        if logical_x_flip is not None:
+            logical_x_error_rate = float(np.mean(pred_logical_x_flip != logical_x_flip))
+        if logical_z_flip is not None:
+            logical_z_error_rate = float(np.mean(pred_logical_z_flip != logical_z_flip))
+        if logical_class4 is not None:
+            pred_logical_class4 = _logical_class4_from_observable_flips(predicted_observables)
+            logical_class4_error_rate = float(np.mean(pred_logical_class4 != logical_class4))
+            logical_class4_accuracy = float(1.0 - logical_class4_error_rate)
+            logical_class4_confusion = _confusion_matrix_multiclass(
+                logical_class4,
+                pred_logical_class4,
+                num_classes=4,
+            )
 
     rounds = metadata.get("circuit", {}).get("rounds")
     estimated_ler_per_cycle = _estimate_ler_per_cycle(frame_error_rate, int(rounds) if rounds is not None else None)
@@ -414,6 +484,7 @@ def evaluate_family_dir(
         "detector_error_model_dem": artifacts.dem_path.as_posix(),
         "circuit_stim": artifacts.circuit_path.as_posix() if artifacts.circuit_path is not None else None,
         "qc_stats_from_dataset": metadata.get("qc_stats", {}),
+        "targets": metadata.get("targets"),
     }
 
     metrics = {
@@ -426,6 +497,11 @@ def evaluate_family_dir(
         "mean_target_observable_weight_per_shot": float(observable_flips.sum(axis=1).mean()),
         "mean_predicted_observable_weight_per_shot": float(predicted_observables.sum(axis=1).mean()),
         "confusion_matrix_logical_label": confusion,
+        "logical_x_error_rate": logical_x_error_rate,
+        "logical_z_error_rate": logical_z_error_rate,
+        "logical_class4_error_rate": logical_class4_error_rate,
+        "logical_class4_accuracy": logical_class4_accuracy,
+        "confusion_matrix_logical_class4": logical_class4_confusion,
     }
 
     timing = {

@@ -1,0 +1,615 @@
+\documentclass[aps,prd,12pt,twocolumn,superscriptaddress,floatfix,longbibliography]{revtex4-2}
+
+\usepackage{kotex}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage{mathptmx}
+\else
+  \usepackage{fontspec}
+  \setmainfont{TeX Gyre Termes}
+  \setsansfont{TeX Gyre Heros}
+  \setmonofont{Latin Modern Mono}
+  \setmainhangulfont[
+    BoldFont={UnBatangBold.ttf},
+    ItalicFont={UnBatang.ttf},
+    BoldItalicFont={UnBatangBold.ttf}
+  ]{UnBatang.ttf}
+  \setsanshangulfont[
+    BoldFont={UnDotumBold.ttf},
+    ItalicFont={UnDotum.ttf},
+    BoldItalicFont={UnDotumBold.ttf}
+  ]{UnDotum.ttf}
+\fi
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xurl}
+\usepackage[a4paper, margin=0.6in]{geometry}
+
+\setlength{\emergencystretch}{2em}
+\hbadness=10000
+\graphicspath{{artifacts/figures/predecoder_v2/}{artifacts/figures/predecoder/}{figure/}}
+\providecommand{\href}[2]{#2}
+
+\newcommand{\predecoderfigure}[2]{%
+\IfFileExists{artifacts/figures/predecoder_v2/#1_v2.pdf}{%
+    \includegraphics[width=#2]{artifacts/figures/predecoder_v2/#1_v2.pdf}%
+}{%
+    \IfFileExists{artifacts/figures/predecoder_v2/#1_v2.png}{%
+        \includegraphics[width=#2]{artifacts/figures/predecoder_v2/#1_v2.png}%
+    }{%
+        \IfFileExists{artifacts/figures/predecoder/#1.pdf}{%
+            \includegraphics[width=#2]{artifacts/figures/predecoder/#1.pdf}%
+        }{%
+            \IfFileExists{artifacts/figures/predecoder/#1.png}{%
+                \includegraphics[width=#2]{artifacts/figures/predecoder/#1.png}%
+            }{%
+                \fbox{\parbox{0.92\linewidth}{%
+                \centering Figure file missing:\\
+                \texttt{artifacts/figures/predecoder_v2/#1_v2.png}}}%
+            }%
+        }%
+    }%
+}%
+}
+
+\begin{document}
+
+\title{Design and Evaluation of a Transition-Aware Neural Pre-Decoder for Surface-Code Quantum Error Correction}
+\author{Jaemin Jeon}
+\affiliation{Korea University}
+\date{May 2026}
+
+\begin{abstract}
+surface code 기반 양자 오류 정정에서 PyMatching은 반복 측정된 syndrome을 이용해
+logical frame을 추정하는 대표적인 matching-based 기준 디코더이다. 본 연구는
+PyMatching이 실패한 일부 shot에서
+detector 몇 개를 국소적으로 뒤집으면 logical decision이 정답으로 돌아오는 경우가
+있다는 관찰에서 출발했다. 그러나 같은 방식의 edit을 잘못 채택하면 이미 맞은 shot을
+틀리게 만들 수 있으므로, 문제를 local edit 후보 생성과 후보 채택 결정으로 나누어
+다루었다.
+
+제안한 transition-aware pre-decoder는 36-channel syndrome/noise volume에서 작은
+detector edit 후보를 만들고, 각 후보를 적용하기 전후의 PyMatching logical class
+변화를 기준으로 후보를 점수화한다. 여기서 transition-aware는 별도의 시간 전이
+모델이 아니라, local edit 전후의 downstream decoder 판단 변화를 후보 선택에
+반영한다는 의미이다. 신경망은 최종 correction chain이나 logical frame을 직접
+출력하지 않는다.
+선택된 edit 또는 원본 syndrome만 PyMatching에 전달하고, 최종 판정은 PyMatching이
+수행한다. 후보 채택 threshold는 train/validation family에서만 정했다.
+
+학습에 사용하지 않은 \texttt{stage\_c\_corr} 평가에서 선택 모드의 pre-decoder는
+d3와 d5에 대해 raw PyMatching 대비 각각 \(+0.66\) pp, \(+0.56\) pp의 평균 정확도
+향상을 보였다. 다만 d5는 여덟 seed 중 두 seed에서만 보정을 채택한 보수적 결과로
+해석해야 한다. d7에서는 선택 모드 향상이 \(+0.02\) pp에 그쳤다. Oracle 분석에서는
+d7에도 회복 가능한 local edit 후보가 남아 있었으므로, 현재 구조의 병목은 후보 생성
+자체보다 selector의 후보 정렬과 held-out noise family에 대한 일반화에 가깝다.
+\end{abstract}
+
+\keywords{quantum error correction, surface code, local edit, neural pre-decoder, PyMatching, syndrome decoding}
+
+\maketitle
+
+\section{서론}
+
+Fault-tolerant quantum computation을 구현하려면, noisy stabilizer measurement로부터
+물리 오류의 logical effect를 추정하는 decoder가 필요하다. surface code에서는 국소
+stabilizer를 반복 측정하고, 시간에 따라 변하는 syndrome을 detector event로
+표현한다~\cite{surfacecode}. 이 detector event는 실제 error path를 직접 알려
+주지는 않지만, 관측된 syndrome과 양립 가능한 error chain의 후보를 제한한다.
+
+PyMatching을 포함한 matching-based decoder는 이러한 inference 문제에서 안정적인
+기준 성능을 제공한다~\cite{pymatching}. 실제 실험을 진행하면서 먼저 확인한 점은,
+PyMatching이 틀린 일부 샘플이 detector 몇 개를 국소적으로 뒤집는 것만으로도
+정답 logical frame으로 돌아올 수 있다는 사실이었다. 반대로 같은 방식의 보정을
+잘못 적용하면 이미 맞은 샘플을 틀리게 만들 수도 있었다. 이 관찰에 따라
+신경망이 최종 logical class를 직접 예측하도록 만들기보다, PyMatching에 들어가기
+전 syndrome을 아주 제한적으로 수정할지를 판단하는 문제로 범위를 좁혔다.
+
+이 설정은 neural pre-decoding 계열의 문제 설정과 가깝다. Pre-decoder는 완전한
+decoder 역할을 맡기보다, 뒤따르는 global decoder에 들어가기 전 syndrome을 줄이거나
+수정하는 앞단 모듈로 동작한다. NVIDIA의 AI-based pre-decoder 연구는 이 방향을 대규모
+surface-code setting에서 보여준 선행 연구이다~\cite{nvidiaising}. 여기서는
+대규모 하드웨어 실험과의 직접 비교보다는, 작은 거리에서 local edit 후보를 만들고
+그 후보를 채택하거나 버리는 결정이 PyMatching 성능에 어떤 영향을 주는지 분해했다.
+
+구현상으로는 3D residual syndrome trunk를 먼저 학습하고, PyMatching 실패 샘플에서
+찾은 local edit motif를 후보로 만들었다. 이후 \texttt{CandidateEditSelector}가
+각 후보를 점수화하도록 학습했는데, 이때 label은 detector mask가 맞는지가 아니라
+그 후보를 적용한 뒤 PyMatching의 \texttt{logical\_class4} 판단이 개선되는지로
+정했다. 결과 해석에서도 raw PyMatching, 후보를 그대로 적용한 결과, 안전 정책을
+거친 결과, 그리고 후보 공간 안에서 가능한 oracle 결과를 분리했다. 이렇게 나누어
+보아야 d3/d5의 실제 향상과 d7에서의 실패 원인을 같은 평가 축에서 비교할 수 있다.
+
+\section{배경 및 관련 연구}
+
+\subsection{surface code와 matching decoder}
+
+surface code는 2차원 격자 위의 data qubit와 측정 qubit를 이용하여 stabilizer
+measurement를 반복한다. 같은 stabilizer 위치에서 측정값이 시간에 따라 바뀌면
+detector event가 발생하며, boundary 및 final measurement에 의해 닫히는 event도
+decoder graph에 포함된다. Decoder는 이 event pattern과 code boundary를 함께
+사용하여 가능한 error chain을 추정하고, 그 chain이 유도하는 logical frame을
+판단한다.
+
+PyMatching은 이 문제를 sparse matching graph 위의 minimum-weight matching 문제로
+정식화한다~\cite{pymatching}. 여기서 PyMatching은 세 가지 역할을 갖는다.
+첫째, 보정을 적용하지 않은 원본 syndrome에 대한 기준 디코더이다. 둘째, 후보
+edit의 benefit/harm label을 산정하는 평가 기준이다. 셋째, neural pre-decoder가
+선택한 syndrome을 최종적으로 판정하는 디코더이다. 본 논문의 성능 비교는 신경망
+보정기와 PyMatching을 결합한 전체 pipeline의 결과이다.
+본문의 \texttt{logical\_class4}는 PyMatching의 logical 판단을 네 개 class로 정리한
+평가 label을 뜻한다. 문맥에 따라 logical frame 또는 logical decision이라고도
+부르지만, 모두 같은 최종 logical 판단을 가리킨다.
+
+\subsection{신경망 디코딩과 사전 디코딩}
+
+신경망을 이용한 surface code 디코딩은 크게 두 계열로 나눌 수 있다. 첫 번째는
+syndrome에서 logical class 또는 correction field를 직접 예측하는 replacement-style
+neural decoder이다. AlphaQubit과 AlphaQubit 2는 이 방향의 대표적인 대규모
+연구이다~\cite{alphaqubit,alphaqubit2}. 또한 convolutional neural decoder는
+surface-code lattice의 local pattern을 직접 활용하는 direct decoder 계열의
+예시이다~\cite{convnnsurface}. 두 번째는 기존 global decoder를 유지하되, 그
+앞단에서 syndrome을 보정하거나 residual problem을 줄이는 pre-decoding 방식이다.
+NVIDIA Ising-Decoding은 neural pre-decoder와 뒤따르는 decoder를 결합한 구조적
+선행 연구로 볼 수 있다~\cite{nvidiaising}.
+
+본 논문은 두 번째 계열에 속한다. 직접 neural classifier를 사용해 final
+logical class를 예측하는 방식은 작은 거리에서는 시도 가능하지만, 거리 증가와
+noise-family shift에 대해 안정적인 기준을 제공하기 어렵다. 반면 pre-decoder
+구조는 PyMatching의 안정성을 유지하면서, 특정 local syndrome pattern에 대한
+입력 수정만 제한적으로 허용한다. 여기서는 neural network의 역할을
+``local edit 후보 선택''으로 둔다.
+
+관련 연구와의 비교에서 중요한 구분은 ``무엇을 신경망이 직접 결정하는가''이다.
+AlphaQubit 계열과 CNN decoder는 syndrome으로부터 final decision 또는 correction을
+직접 예측하는 방향에 가깝다~\cite{alphaqubit,alphaqubit2,convnnsurface}. 반면 본
+연구에서는 최종 matching 문제를 PyMatching에 남겨 두고, 신경망은 그 입력을
+국소적으로 수정할지 결정한다. NVIDIA Ising-Decoding은 pre-decoder와 후속 decoder를
+결합한다는 점에서 가장 가까운 구조적 참고점이지만~\cite{nvidiaising}, 여기서는
+작은 거리에서 후보 생성과 후보 선택의 실패 경로를 더 세밀하게 본다. Google Willow
+결과는 hardware-scale QEC의 문맥을 제공하지만~\cite{willowthreshold}, 본 논문의
+수치와 직접 비교하는 대상은 아니다.
+
+\begin{table*}[t]
+\caption{관련 연구와 본 논문의 위치.}
+\label{tab:related-work}
+\centering
+\scriptsize
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}llll}
+\toprule
+work & learned decision & final decoder & relation \\
+\midrule
+AlphaQubit family~\cite{alphaqubit,alphaqubit2} & logical/correction decision & neural decoder & direct final-decision model \\
+CNN surface decoder~\cite{convnnsurface} & local-pattern correction & CNN decoder & direct decoder baseline \\
+NVIDIA Ising-Decoding~\cite{nvidiaising} & pre-decoding decision & residual decoder & pre-decoder before residual decoder \\
+Near-term neural decoder~\cite{neartermnn} & experimental syndrome mapping & neural decoder & experimental syndrome-to-logical mapping \\
+Google Willow~\cite{willowthreshold} & hardware-scale QEC evidence & hardware decoder stack & hardware-scale motivation only \\
+This work & local detector edit & PyMatching & local-edit selection before PyMatching \\
+\bottomrule
+\end{tabular*}
+\end{table*}
+
+\section{데이터셋 및 노이즈 환경}
+
+실험은 Stim 기반으로 생성한 rotated surface-code memory circuit과 자체 noise
+family를 사용해 수행했다~\cite{stim}. Noise family는 단계적으로 구성했다.
+\texttt{stage\_a\_si1000}은 surface-code resource estimate에서 사용된
+superconducting-inspired 설정을 따른 기본 SI1000 계열 noise 환경이고
+~\cite{honeycombmemory},
+\texttt{stage\_b\_local}은 local heterogeneity를 추가한 환경이며,
+\texttt{stage\_c\_corr}는 correlated stray surrogate를 포함한 held-out 평가
+환경이다. 본 논문의 정량 주장은 \texttt{stage\_c\_corr}에서의 성능을 기준으로
+한다.
+
+모델 입력은 detector event만으로 구성하지 않았다. Detector mask, geometry
+metadata, noise-family indicator, distance/round statistics, event fraction,
+physical-noise summary 등을 함께 포함하여 36-channel syndrome/noise volume을
+구성했다. 채널 의미는 code distance와 무관하게 고정하고, spatial/temporal
+volume의 크기만 distance에 따라 달라진다. 예를 들어 d3, d5, d7의 입력 shape은
+각각 \([36,4,4,4]\), \([36,6,6,6]\), \([36,8,8,8]\)이다.
+
+각 distance의 원본 manifest는 family별 \(2048\) shots로 생성했다. 학습용 local edit
+target은 train/validation family의 고정된 \(1024\)-shot subset에서 생성했다.
+본문에 보고한 주요 결과는 학습에 사용하지 않은 \texttt{stage\_c\_corr}의
+\(1024\) shots/seed에서 계산했고, held-out local edit 탐색은 평가 후 oracle 회복
+가능성 분석에만 사용했다. 각 train family에서는 고정된 validation split
+\(154\) shots를 사용했고, 나머지 샘플이 trunk와 selector 학습에 사용된다.
+
+\begin{table*}[t]
+\caption{Distance별 데이터 구성. 원본 dataset은 family별 \(2048\) shots이고, 학습용
+local edit target은 train/validation family의 고정된 \(1024\)-shot subset에서
+생성했다. Held-out family의 \(1024\) shots는 최종 평가와 oracle 분석에만 사용했다.}
+\label{tab:dataset-config}
+\centering
+\scriptsize
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lccccc}
+\toprule
+distance & rounds & input shape & train/validation families & held-out family & reported seeds \\
+\midrule
+d3 & 3 & \([36,4,4,4]\) & A/B, \(1024\) shots each & C, \(1024\) shots & \(0..7\) \\
+d5 & 5 & \([36,6,6,6]\) & A/B, \(1024\) shots each & C, \(1024\) shots & \(0..7\) \\
+d7 & 7 & \([36,8,8,8]\) & A/B, \(1024\) shots each & C, \(1024\) shots & \(0..57\) \\
+\bottomrule
+\end{tabular*}
+\end{table*}
+
+\begin{table*}[t]
+\caption{실험에 사용한 noise family.}
+\label{tab:noise-family}
+\centering
+\footnotesize
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}llll}
+\toprule
+family & noise structure & role & reported use \\
+\midrule
+\texttt{stage\_a\_si1000} & SI1000-style baseline physical noise & baseline family & train/validation \\
+\texttt{stage\_b\_local} & Stage A plus local heterogeneity & structured-noise family & train/validation \\
+\texttt{stage\_c\_corr} & Stage B plus correlated stray surrogate & primary test family & held-out evaluation \\
+\bottomrule
+\end{tabular*}
+\end{table*}
+
+\section{제안 방법}
+
+제안 방법은 PyMatching 앞단에 배치되는 신경망 사전 디코더이다.
+전체 추론 흐름은 Figure~\ref{fig:pipeline}과 같다. 신경망은 detector-event
+volume에서 small local edit 후보를 만들고, 각 후보가 PyMatching 결과에
+유익한지 또는 해로운지 평가한다. 안전 조건을 통과한 후보만 syndrome에
+적용되며, 그렇지 않은 경우 raw no-edit syndrome이 그대로 PyMatching에 전달된다.
+Selector는 raw no-edit syndrome을 넣었을 때의 PyMatching logical class와, 특정
+local edit을 적용한 뒤의 PyMatching logical class 사이의 변화를 학습 신호와
+candidate feature로 사용한다. 즉 detector를 복원하는 문제보다, 그 edit이 최종
+logical 판단을 어느 방향으로 바꾸는지를 기준으로 후보를 고른다.
+
+\begin{figure*}[t]
+\centering
+\predecoderfigure{fig1_predecoder_pipeline}{\textwidth}
+\caption{제안하는 neural pre-decoder와 PyMatching 결합 구조. 신경망은 local
+syndrome edit의 채택 여부만 결정하고, 최종 logical frame은 PyMatching이
+예측한다.}
+\label{fig:pipeline}
+\end{figure*}
+
+\subsection{SyndromeEditPreDecoder}
+
+\texttt{SyndromeEditPreDecoder}는 3D convolution stem과 세 개의 residual 3D
+convolution block으로 구성된다. 최종 d3/d5 설정에서는 hidden channel
+\(24\), dense hidden dimension \(64\), dropout \(0.1\)을 사용했으며, 해당 설정의
+parameter 수는 \(118834\)이다. Trunk는 detector-level \texttt{edit\_logits},
+shot-level \texttt{needs\_edit\_logits}, 그리고 pooled shot feature를 출력한다.
+이 중 pooled feature와 local candidate feature가 patch-head selector의 입력으로
+사용된다.
+
+Trunk 학습은 Adam optimizer를 사용했다. 기본 학습 설정은 batch size \(64\),
+learning rate \(10^{-3}\), 최대 \(8\) epochs이다. Loss는 세 부분으로 구성했다.
+첫째, known local-edit target이 있는 detector 위치에 대해 masked binary
+cross-entropy를 적용했다. 둘째, shot 단위로 edit이 필요한지를 예측하는
+\texttt{needs\_edit\_logits}에 binary cross-entropy를 적용했다. 셋째, edit이
+필요한 샘플에서 target edit이 identity 후보보다 높은 점수를 갖도록 margin \(1.0\)
+의 ranking loss를 더했다. 실제 보고값에는 validation-family metric
+이 가장 좋은 epoch의 checkpoint를 사용했다.
+
+\subsection{Local motif candidate}
+
+모델은 많은 detector를 한 번에 뒤집는 대규모 syndrome 보정을 허용하지 않는다.
+Target 생성 단계에서는 raw PyMatching이 틀린 샘플에 대해서만 국소 탐색을 수행했다.
+탐색 반경은 시간 방향 \(1\), 공간 방향 \(1\)로 두었고, 한 후보가 뒤집을 수 있는
+detector 수는 최대 \(2\)개로 제한했다. 각 incorrect shot에서 최대 \(20\)개의 local
+variant를 검사하여, PyMatching 결과를 정답 \texttt{logical\_class4}로 되돌리는
+edit을 target으로 기록했다. 예를 들어 held-out \texttt{stage\_c\_corr}에서는 d3의
+raw 실패 73개 중 65개, d5의 raw 실패 114개 중 92개, d7의 raw 실패 130개 중
+114개가 이런 local edit 탐색으로 oracle 수준에서는 회복 가능했다.
+이 held-out family의 local edit 탐색 결과는 학습, 후보 motif 선택, threshold
+결정에 사용하지 않았고, 후보 공간의 oracle 회복 가능성을 평가하기 위한 사후
+분석으로만 사용했다.
+
+최종 후보 구성에서는 train/validation family에서 얻은 target edit들을 그대로 모두
+쓰지 않고 \texttt{local\_motif\_selector}로 후보를 줄였다. 관측된 local edit
+pattern을 motif로 모은 뒤 최대 \(16\)개 class만 유지하고, inference 때는 trunk의 detector별 edit
+확률 합이 큰 motif placement를 top-\(32\)개까지 후보로 넣었다. Identity, 즉 아무
+보정도 하지 않는 후보는 항상 포함된다. 이 구조 때문에 raw PyMatching은 외부
+baseline일 뿐 아니라, 선택 모드 내부에서 안전하게 되돌아갈 수 있는 기준 경로가
+된다.
+
+\subsection{Benefit/harm selector}
+
+\texttt{CandidateEditSelector}는 각 local edit 후보에 scalar score를 부여한다.
+후보의 label은 해당 edit을 적용한 뒤 PyMatching의 \texttt{logical\_class4} 판단이
+raw no-edit보다 개선되었는지 여부로 정의한다.
+Figure~\ref{fig:architecture}는 이 구조를 요약한다.
+
+Selector 입력은 shot-level pooled feature와 candidate feature의 결합이다. Candidate
+feature에는 edit weight, detector별 edit probability의 합/평균/최댓값, motif
+빈도, detector 좌표 요약, 주변 event/evidence, 그리고 \(3\times3\times3\) local
+patch에서 읽은 event/probability 값이 포함된다. Patch-head는 이 local patch slice를
+작은 MLP로 먼저 embedding한 뒤, 나머지 candidate feature 및 shot feature와
+concatenate한다. Selector 학습은 Adam optimizer, learning rate \(5\times10^{-4}\),
+최대 \(6\) epochs로 수행했다. 기본 loss는 후보 group 안에서 가장 좋은 후보를
+고르는 cross-entropy이고, 여기에 유익한 nonzero edit이 해로운 nonzero edit보다
+높은 점수를 갖도록 하는 pairwise loss를 weight \(1.0\), margin \(0.5\)로
+추가했다. 이미 맞은 shot을 망치는 후보에는 harm weight \(2.0\), raw가
+틀린 shot에서 여전히 틀린 nonzero 후보에는 miss weight \(0.25\)를 부여했다.
+
+\begin{figure*}[t]
+\centering
+\predecoderfigure{fig2_model_architecture}{\textwidth}
+\caption{Neural pre-decoder의 구조. \texttt{SyndromeEditPreDecoder}가 shared 3D
+feature volume을 만들고 edit, needs-edit, pooled-shot head를 출력한다. 이후
+patch-head \texttt{CandidateEditSelector}가 candidate feature를 점수화하고,
+선택된 보정 또는 원본 유지 경로가 PyMatching으로 전달된다.}
+\label{fig:architecture}
+\end{figure*}
+
+\subsection{Selected-mode safety}
+
+Candidate branch가 항상 최종 결과에 반영되는 것은 아니다. 채택 조건과 threshold는
+train/validation family에서만 정했고, held-out \texttt{stage\_c\_corr} 결과는
+threshold나 seed별 채택 여부를 정하는 데 사용하지 않았다. Validation family에서
+후보 적용이 raw no-edit 대비 충분한 validation gain을 보이지 않거나, 해로운 후보
+수와 selector margin 조건을 넘어서면 선택 모드는 보정을 적용하지 않고 원본
+syndrome을 그대로 PyMatching에 전달한다. 이 후보 우선 안전 정책은 local edit이
+일부 seed에서 PyMatching을 악화시킬 수 있다는 관찰에 기반한다.
+
+구체적으로 validation family에서 candidate branch가 raw no-edit보다 충분히 좋아야
+한다. Validation delta가 \(+0.02\) 이상이면 충분한 채택 근거로 보고 그대로
+받아들였다. 약한 양의 증거는 delta \(+0.005\) 이상, selector margin \(0.5\) 이상,
+harmed count가 \(2\) 이하일 때만 채택했다. 그 밖의 경우에는 보정을 적용하지 않는다.
+d5에서 seed 2와
+seed 3만 local edit을 채택하고 나머지 seed가 원본 syndrome을 유지한 것은 이
+조건을 그대로 적용한 결과이다.
+
+\section{실험 설정}
+
+비교 대상은 네 가지 경로로 정의했다. Raw PyMatching은 원본 syndrome을 그대로
+사용한 기준 결과이다. Selected predecoder는 안전 정책이 선택한 local edit 또는
+수정하지 않은 syndrome을 적용한 제안 방법의 최종 결과이다. Candidate branch는
+selector가 고른 후보를 안전 정책 없이 바로 적용했을 때의 성능이며, target
+local-edit oracle은 정해진 후보 공간 안에서 가능한 최선의 local edit 성능이다.
+
+주요 metric은 학습에 사용하지 않은 \texttt{stage\_c\_corr}에서의
+\texttt{logical\_class4} accuracy이다. Candidate branch와 selected branch를
+분리해 보고한 이유는, 후보 공간의 잠재력과 실제 채택 정책의 안정성을 구분하기
+위해서이다. 이 구분이 없으면 d7에서 관측되는 oracle 기준 회복 가능성과 낮은
+선택 모드 향상의 차이를 설명하기 어렵다.
+
+\section{실험 결과}
+
+\subsection{Main accuracy}
+
+Table~\ref{tab:main-results}와 Figure~\ref{fig:main-accuracy}는 d3, d5, d7의
+주요 결과를 보여준다. d3와 d5에서는 선택 모드의 pre-decoder가 raw PyMatching보다
+높은 평균 accuracy를 보였다. 반면 d7에서는 정확도 향상이 \(+0.02\) pp에 그쳐,
+현재 학습된 selector가 의미 있는 회복을 만들었다고 보기는 어렵다.
+
+\begin{table*}[t]
+\caption{Held-out \texttt{stage\_c\_corr}에서의 main accuracy.}
+\label{tab:main-results}
+\centering
+\scriptsize
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}lcccccc}
+\toprule
+distance & seeds & raw & selected & candidate & oracle & gain \\
+\midrule
+d3 & \(0..7\) & 92.87\% & 93.53\% & 93.53\% & 99.22\% & \(+0.66\) pp \\
+d5 & \(0..7\) & 88.87\% & 89.43\% & 89.18\% & 97.85\% & \(+0.56\) pp \\
+d7 & \(0..57\) & 87.30\% & 87.32\% & 87.15\% & 98.44\% & \(+0.02\) pp \\
+\bottomrule
+\end{tabular*}
+\end{table*}
+
+\begin{figure*}[t]
+\centering
+\predecoderfigure{fig3_main_accuracy_comparison}{\textwidth}
+\caption{거리별 held-out accuracy. d3/d5에서는 선택 모드의 pre-decoder가 raw
+PyMatching을 넘지만, d7에서는 oracle 기준 회복 가능성이 큰데도 실제 선택 결과의
+회복은 거의 나타나지 않는다.}
+\label{fig:main-accuracy}
+\end{figure*}
+
+\subsection{d3/d5 robustness}
+
+d3는 seed \(0..7\) 전부에서 양의 정확도 변화를 보였다. 아래 표의 seed classes는
+selected delta가 positive/neutral/negative인 seed 수를 뜻한다. d3에서도 shot
+단위로는 개선된 경우와 악화된 경우가 함께 존재하지만, 여덟 seed의 net effect는
+모두 양수였다. d5는 두 seed에서만 local selector를 채택하고, 나머지 여섯 seed에서는
+원본 syndrome을 유지했다. d5의 평균 향상은 유익한 경우에만 보정을 채택한
+selected-mode 결과로 제한된다.
+
+\begin{table}[t]
+\caption{d3/d5 seed \(0..7\) robustness summary. Seed classes are
+positive/neutral/negative seed counts.}
+\label{tab:d3d5-robustness}
+\centering
+\footnotesize
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lccc}
+\toprule
+distance & seed classes & gain & improved/harmed \\
+\midrule
+d3 & \(8/0/0\) & \(+0.66\) pp & \(205/151\) \\
+d5 & \(2/6/0\) & \(+0.56\) pp & \(56/10\) \\
+\bottomrule
+\end{tabular*}
+\end{table}
+
+Seed-level bootstrap 95\% confidence interval은 d3가 약 \([+0.45,+0.85]\) pp,
+d5가 약 \([0.00,+1.37]\) pp이다. Exact sign test에서도 d3의 one-sided p-value는
+\(0.0039\)인 반면, d5는 \(0.25\)이다. 따라서 d3는 검사한 seed 전부에서 양의
+결과를 보인 사례로 제시할 수 있지만, d5는 positive mean과 선택 조건의 안정성을
+중심으로 해석해야 한다.
+
+\begin{table}[t]
+\caption{d3/d5 paired seed-level statistics.}
+\label{tab:paired-stats}
+\centering
+\footnotesize
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lccc}
+\toprule
+distance & seed classes & sign p & sign-flip p \\
+\midrule
+d3 & \(8/0/0\) & 0.0039 & 0.0039 \\
+d5 & \(2/6/0\) & 0.2500 & 0.2500 \\
+\bottomrule
+\end{tabular*}
+\end{table}
+
+\begin{table*}[t]
+\caption{d5 seed별 선택 결과와 원본 유지 여부.}
+\label{tab:d5-fallback}
+\centering
+\scriptsize
+\begin{tabular*}{\textwidth}{@{\extracolsep{\fill}}clrrl}
+\toprule
+seed & 선택 경로 & selected delta & candidate delta & 해석 \\
+\midrule
+0 & 원본 유지 & \(+0.00\) pp & \(+0.00\) pp & 보정 미채택 \\
+1 & 원본 유지 & \(+0.00\) pp & \(+0.00\) pp & 보정 미채택 \\
+2 & 보정 채택 & \(+2.15\) pp & \(+2.15\) pp & 유익한 보정 \\
+3 & 보정 채택 & \(+2.34\) pp & \(+2.34\) pp & 유익한 보정 \\
+4 & 원본 유지 & \(+0.00\) pp & \(-0.78\) pp & 해로운 후보 차단 \\
+5 & 원본 유지 & \(+0.00\) pp & \(+0.00\) pp & 보정 미채택 \\
+6 & 원본 유지 & \(+0.00\) pp & \(-1.17\) pp & 해로운 후보 차단 \\
+7 & 원본 유지 & \(+0.00\) pp & \(+0.00\) pp & 보정 미채택 \\
+\bottomrule
+\end{tabular*}
+\end{table*}
+
+Table~\ref{tab:d5-fallback}는 d5의 평균 향상이 seed 2와 seed 3에서 발생했음을
+보여준다. 반대로 seed 4와 seed 6의 candidate branch는 해로운 후보였지만,
+선택 모드는 보정을 적용하지 않음으로써 해당 성능 하락을 막았다.
+
+\subsection{Candidate branch와 selected branch}
+
+Candidate branch는 후보 공간의 잠재력을 보여주지만, 안전 정책 없이 적용하면
+해로운 보정도 함께 반영된다. 특히 d7에서는 candidate branch의 improved/harmed
+shot 수가 \(161/251\)로 harmed 쪽이 더 많다. 선택 모드는 대부분 보정을
+적용하지 않아 큰 성능 하락을 막지만, 동시에 oracle 기준의 회복 가능성을 충분히
+활용하지도 못한다. 아래 결과에서는 candidate, selected, oracle branch를 구분해
+표기한다.
+d3에서는 candidate와 selected accuracy가 모두 93.53\%로 같아, fallback이 결과를
+바꾸지 않았다. 반면 selected와 candidate의 차이는 d5에서 \(+0.25\) pp, d7에서
+\(+0.17\) pp이며, 이는 safety policy가 해로운 후보를 차단해 얻은 효과를 보여준다.
+
+\section{d7 한계 분석}
+
+d7의 선택 모드 정확도 변화는 \(+0.02\) pp에 불과하다. 그러나 target local-edit
+oracle accuracy는 98.44\%이고, 모든 58개 seed에 oracle 기준의 회복 가능성이
+존재한다. 따라서 d7의 한계를 후보 공간 안에 유익한 local edit이 없어서 생긴
+문제로 해석하는 것은 적절하지 않다.
+
+더 직접적인 문제는 selector가 학습에 사용하지 않은 평가 환경에서 유익한 후보와
+해로운 후보를 안정적으로 구분하지 못한다는 점이다. d7 candidate outcome은
+positive \(6\), neutral \(35\), harmful \(17\)로 나뉘며, 후보를 안전 정책 없이
+적용하면 평균적으로 \(-0.15\) pp 하락했다. Figure~\ref{fig:d7-oracle}은 oracle
+기준 회복 가능성과 false-positive 구조를 함께 보여준다.
+
+\begin{figure*}[t]
+\centering
+\predecoderfigure{fig4_d7_oracle_gap_false_positive}{\textwidth}
+\caption{d7의 oracle 기준 회복 가능성과 false-positive 후보 문제. 후보 공간에는
+유익한 edit이 남아 있지만, learned selector가 validation-positive branch를
+held-out에서 안정적으로 고르지 못한다.}
+\label{fig:d7-oracle}
+\end{figure*}
+
+Validation 결과와 held-out 결과의 불일치는 selector 일반화 문제가 주요 병목임을
+가리킨다.
+Validation-positive candidate seed 22개 중 held-out에서 해로운 결과로 바뀐 seed는
+13개이고, positive로 남은 seed는 5개뿐이다. 즉 validation evidence만으로 후보
+채택을 결정하면 false-positive에 해당하는 해로운 edit을 충분히 차단하기 어렵다.
+여기서 false-positive는 validation-positive였지만 held-out에서 harmful로 바뀐
+seed를 뜻하며, held-out neutral 4개는 harmful false-positive 비율의 분자에 넣지
+않았다. Validation-positive seed 중 harmful held-out outcome 비율은
+\(13/22=59.09\%\)이다.
+
+\begin{table}[t]
+\caption{d7 validation class와 held-out outcome의 불일치.}
+\label{tab:d7-mismatch}
+\centering
+\footnotesize
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lccc}
+\toprule
+validation class & harmful & neutral & positive \\
+\midrule
+neutral & 4 & 31 & 1 \\
+positive & 13 & 4 & 5 \\
+\bottomrule
+\end{tabular*}
+\end{table}
+
+\begin{figure*}[t]
+\centering
+\predecoderfigure{fig5_d7_validation_heldout_scatter}{\textwidth}
+\caption{d7 validation delta와 held-out candidate delta의 seed-level scatter.
+Validation-positive evidence가 held-out correlated noise에서 그대로 유지되지
+않는다는 점이 핵심이다.}
+\label{fig:d7-scatter}
+\end{figure*}
+
+해로운 candidate seed는 총 17개였고, 선택 모드의 guard는 이 \(17/17\)개에서
+모두 보정을 적용하지 않고 원본 syndrome을 유지했다. 즉 안전 정책은 d7에서
+성능을 크게 올리지는 못했지만, 해로운 후보가 실제 출력으로 전달되는 것은 막았다.
+
+d7에 대해서는 threshold sweep도 추가로 수행했지만, 현재 model family 안에서는
+합리적인 해결책을 찾지 못했다. 약 \(18.3\)만 개의 scalar adoption-threshold
+policy를 검사했지만, 사전에 정의한 preserve/recover/block seed-level 조건을
+동시에 만족한 policy는 없었다. 정확한 sentinel seed 집합은 재현성 패키지에
+기록했다.
+유익한 후보와 해로운 후보를 직접 구분하도록 학습 목표를 바꾸거나, 후보 간
+호환성을 반영한 pairwise top-k를 적용한 경우에도 true positive 보존과 false
+positive 차단을 동시에 만족하지 못했다. 따라서 d7의 다음 개선은 단순 threshold
+조정이 아니라 selector의 후보 정렬과 일반화 목표를 다시 설계하는 방향이어야 한다.
+
+\begin{figure*}[t]
+\centering
+\predecoderfigure{fig6_oracle_recovery_distribution}{\textwidth}
+\caption{Seed-level oracle recovery. d3/d5는 oracle 기준 회복 가능성의 일부를 실제
+selected 결과로 회복하지만, d7 선택 모드는 candidate-oracle 기준의 회복 가능성을
+거의 활용하지 못한다.}
+\label{fig:oracle-recovery}
+\end{figure*}
+
+\section{논의}
+
+d3/d5 결과에서 중요한 점은 보정 자체보다 채택 조건이다. d5에서는 candidate
+branch만 보면 해로운 seed가 있었지만, validation에서 정한 조건을 통과한 seed 2와
+seed 3에서만 보정을 적용했다. 이 결과는 제한된 후보 집합에서 PyMatching에 도움이
+되는 경우를 selector가 가려낼 수 있었다는 정도로 읽어야 한다.
+
+d7에서는 같은 절차가 거의 이득을 만들지 못했다. Oracle 분석에서는 회복 가능한
+local edit이 남아 있었지만, validation-positive 후보 중 상당수가 held-out에서
+해로운 결과로 바뀌었다. 즉 후보 생성보다 selector의 noise-family 일반화가 더
+직접적인 병목이었다.
+
+본 논문의 정량 평가는 Stage A/B/C noise family 안에서 해석해야 한다. 이 범위는
+pre-decoder의 후보 생성과 후보 채택을 분리해 보기 위해 정한 실험 범위이며,
+대규모 hardware decoder 성능을 주장하는 범위는 아니다.
+
+\section{결론}
+
+본 논문에서는 PyMatching을 대체하지 않고, 그 앞단에서 작은 detector edit을
+선택하는 신경망 사전 디코더를 구현했다. d3/d5의 held-out
+\texttt{stage\_c\_corr}에서는 각각 \(+0.66\) pp, \(+0.56\) pp의 평균 향상을
+얻었다. 앞의 seed-level 분석에서 보듯 d5 향상은 두 seed만 보정을 채택한
+selected-mode 개선으로 남는다.
+
+d7에서는 \(+0.02\) pp에 그쳤다. 후보 공간에는 회복 가능한 edit이 있었지만,
+validation에서 좋아 보인 후보가 held-out에서 해로운 경우가 많았다. 따라서 다음
+개선은 더 큰 후보 집합보다 selector target과 validation-to-held-out 일반화 문제를
+다루는 쪽이 되어야 한다.
+
+\section*{재현성 관리}
+
+본 연구의 표와 그림은 동일한 평가 산출물에서 생성하였다. 최종 결과표, d3/d5
+seed별 비교 통계, oracle 기준 회복률 분포, d7의 해로운 후보 분류를 각각 별도
+기록으로 보존했고, 서로 다른 표와 그림이 같은 수치에 기반하는지 consistency
+check로 점검했다. 논문에 사용한 최종 산출물은 \(37/37\)개의 consistency check를
+통과했으며, 실패 항목은 \(0\)개였다. 관련 summary와 재현성 메모는
+\texttt{artifacts/eval/nn/} 및 \texttt{PREDECODER\_REPRODUCIBILITY\_PACKAGE.md}에
+보존했다. Hyperparameter sensitivity 기록은 본문 표에는 포함하지 않고
+\texttt{PREDECODER\_HYPERPARAMETER\_SENSITIVITY.md}에 별도로 보존했다.
+
+\bibliographystyle{unsrtnat}
+\bibliography{main}
+
+\end{document}

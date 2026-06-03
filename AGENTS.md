@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-Core experiment code lives at the repository root. Use `config.py` for experiment configuration, `circuits.py` for ideal circuit generation, `noise_si1000.py` and `noise_willowcore.py` for noise injection, and `sample_dataset.py` for dataset creation. Decoder implementations are under `decoders/` (`baseline_pymatching.py`, `baseline_nn.py`, `baseline_tracknn.py`, `baseline_trackformer.py`, plus shared helpers in `track_common.py`). Inspection utilities live in `inspect_samples.py` and `tools/`. Generated datasets, checkpoints, and evaluation JSON files belong in `artifacts/` and should not be treated as hand-edited source files.
+Core experiment code lives at the repository root. Use `config.py` for experiment configuration, `circuits.py` for ideal circuit generation, `noise_si1000.py` and `noise_willowcore.py` for noise injection, and `sample_dataset.py` for dataset creation. Active decoder implementations are under `decoders/` (`baseline_pymatching.py`, `baseline_rectcnn.py`, `research_noise_aware_3d.py`). Archived legacy decoders live under `legacy_archive/`. Inspection utilities live in `inspect_samples.py` and `tools/`. Generated datasets, checkpoints, and evaluation JSON files belong in `artifacts/` and should not be treated as hand-edited source files.
 
 ## Build, Test, and Development Commands
 Run scripts directly with Python from the repo root.

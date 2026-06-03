@@ -27,6 +27,11 @@ Non-goals of v1
 - Cross-geometry training
 - CNN / GNN / sequence models
 - Multi-observable decoding
+
+Project status
+--------------
+Legacy binary logical-flip baseline kept for historical comparison only.
+Do not use this module for the rebuilt logical-axis / logical-class decoder path.
 """
 
 from dataclasses import asdict, dataclass
@@ -38,6 +43,7 @@ import datetime as dt
 import json
 import math
 import time
+import warnings
 
 import numpy as np
 
@@ -1150,6 +1156,12 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    warnings.warn(
+        "baseline_nn.py is a legacy binary logical-flip baseline kept only for "
+        "historical comparison. Use baseline_rectcnn.py or research_noise_aware_3d.py "
+        "for the rebuilt decoder line.",
+        stacklevel=2,
+    )
     args = parse_args()
     input_mode, resolved_family_dir, _manifest_data = _resolve_input_family_dir(
         family_dir=args.family_dir,

@@ -32,6 +32,11 @@ Non-goals of v1
 - Cross-geometry training
 - Multi-observable decoding
 - Heavy AQ2-scale training or real-time streaming features
+
+Project status
+--------------
+Legacy trackformer-style binary decoder kept for reference and ablation only.
+It is not part of the rebuilt logical-axis / logical-class decoder mainline.
 """
 
 from dataclasses import asdict, dataclass
@@ -43,6 +48,7 @@ import datetime as dt
 import json
 import math
 import time
+import warnings
 
 import numpy as np
 
@@ -1866,6 +1872,12 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    warnings.warn(
+        "baseline_trackformer.py is a legacy trackformer-style binary decoder kept "
+        "only for historical comparison. Use baseline_rectcnn.py or "
+        "research_noise_aware_3d.py for the rebuilt decoder line.",
+        stacklevel=2,
+    )
     args = parse_args()
     input_mode, resolved_family_dir, _manifest_data = _resolve_input_family_dir(
         family_dir=args.family_dir,
