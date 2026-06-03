@@ -85,44 +85,6 @@ def _line_number(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
 
-def _read_braced_groups(text: str, offset: int, count: int) -> list[str] | None:
-    groups: list[str] = []
-    pos = offset
-    for _ in range(count):
-        while pos < len(text) and text[pos].isspace():
-            pos += 1
-        if pos >= len(text) or text[pos] != "{":
-            return None
-        pos += 1
-        start = pos
-        depth = 1
-        while pos < len(text) and depth:
-            if text[pos] == "{":
-                depth += 1
-            elif text[pos] == "}":
-                depth -= 1
-            pos += 1
-        if depth:
-            return None
-        groups.append(text[start : pos - 1])
-    return groups
-
-
-def _fixed_display_labels(text: str) -> set[str]:
-    labels: set[str] = set()
-    for command in ("fixedwidefigure",):
-        for match in re.finditer(rf"\\{command}", text):
-            groups = _read_braced_groups(text, match.end(), 3)
-            if groups:
-                labels.add(groups[1].strip())
-    for env in ("fixedtable", "fixedwidetable"):
-        for match in re.finditer(rf"\\begin\{{{env}\}}", text):
-            groups = _read_braced_groups(text, match.end(), 2)
-            if groups:
-                labels.add(groups[0].strip())
-    return labels
-
-
 def _bib_database_keys(main_tex: Path, text: str) -> set[str]:
     keys: set[str] = set()
     for group in _find_all(r"\\bibliography\{([^}]+)\}", text):
@@ -159,7 +121,7 @@ def _check(
 def build_summary(main_tex: Path, figure_dir: Path) -> dict[str, Any]:
     text = main_tex.read_text(encoding="utf-8")
 
-    labels = set(_find_all(r"\\label\{([^}]+)\}", text)) | _fixed_display_labels(text)
+    labels = set(_find_all(r"\\label\{([^}]+)\}", text))
     refs = set(_find_all(r"\\(?:ref|pageref)\{([^}]+)\}", text))
     raw_cites = _find_all(r"\\cite\{([^}]+)\}", text)
     cites = {key.strip() for group in raw_cites for key in group.split(",") if key.strip()}
