@@ -33,6 +33,7 @@
 \setlength{\dbltextfloatsep}{10pt plus 2pt minus 2pt}
 \graphicspath{{artifacts/figures/predecoder_v2/}{artifacts/figures/predecoder/}{figure/}}
 \providecommand{\href}[2]{#2}
+\newcommand{\thesiscaptionfont}{\footnotesize}
 
 \newcommand{\predecoderfigure}[2]{%
 \IfFileExists{artifacts/figures/predecoder_v2/#1_v2.pdf}{%
@@ -167,11 +168,21 @@ patterns. Here, the neural model is restricted to local candidate selection.
 Table~\ref{tab:related-work} summarizes the position of the proposed approach relative to
 related studies. The table is not a head-to-head performance comparison on the
 same dataset. It clarifies which decision is learned and which decoder produces
-the final logical decision. The numerical claims below are limited to the
+the final logical decision. An important distinction is which decision the
+neural model makes directly. The AlphaQubit family and CNN decoders predict the
+final logical decision or correction directly from the
+syndrome~\cite{alphaqubit,alphaqubit2,convnnsurface}, whereas this work leaves
+the final matching problem to PyMatching and only decides whether to edit its
+input locally. NVIDIA Ising-Decoding is the closest structural reference, since
+it also combines a pre-decoder with a downstream decoder~\cite{nvidiaising}, but
+here the candidate-generation and candidate-selection failure paths are examined
+more closely at small code distances. The Google Willow results provide
+hardware-scale QEC context~\cite{willowthreshold}, but they are not directly
+compared against the numbers reported here. The numerical claims below are limited to the
 Stage A/B/C noise families and the held-out \texttt{stage\_c\_corr} evaluation.
 
 \begin{table*}[!tbp]
-\caption{Position of this work relative to related decoding studies.}
+\caption{\thesiscaptionfont Position of this work relative to related decoding studies.}
 \label{tab:related-work}
 \centering
 \scriptsize
@@ -198,7 +209,7 @@ noise setting, following the superconducting-inspired setting used in
 surface-code resource estimates~\cite{honeycombmemory}. \texttt{stage\_b\_local} adds local heterogeneity, and
 \texttt{stage\_c\_corr} adds a correlated stray surrogate. The quantitative
 claims in this work are based on held-out \texttt{stage\_c\_corr}
-evaluation.
+evaluation. Table~\ref{tab:noise-family} summarizes the three noise families.
 
 Each shot is represented as a 36-channel syndrome/noise volume containing
 detector events, a valid-detector mask, geometry metadata, noise-family
@@ -212,10 +223,11 @@ targets are generated from fixed \(1024\)-shot subsets of the train/validation
 families. The \(1024\) held-out shots per seed in \texttt{stage\_c\_corr} are
 used only for final evaluation and post hoc oracle analysis. Each train family
 uses a fixed validation split of \(154\) shots, and the remaining samples are
-used to train the trunk and selector.
+used to train the trunk and selector. Table~\ref{tab:dataset-config} summarizes
+the dataset configuration by code distance.
 
 \begin{table*}[!tbp]
-\caption{Dataset configuration by code distance. Each original dataset contains
+\caption{\thesiscaptionfont Dataset configuration by code distance. Each original dataset contains
 \(2048\) shots per family. Training local-edit targets are generated from fixed
 \(1024\)-shot subsets of the train/validation families, while the held-out
 \(1024\) shots are used only for final evaluation and oracle analysis.}
@@ -234,7 +246,7 @@ d7 & 7 & \([36,8,8,8]\) & A/B, \(1024\) shots each & C, \(1024\) shots & \(0..57
 \end{table*}
 
 \begin{table*}[!tbp]
-\caption{Noise families used in the experiments.}
+\caption{\thesiscaptionfont Noise families used in the experiments.}
 \label{tab:noise-family}
 \centering
 \footnotesize
@@ -265,7 +277,7 @@ candidate features.
 \begin{figure*}[!tbp]
 \centering
 \predecoderfigure{fig1_predecoder_pipeline}{\textwidth}
-\caption{Pipeline of the proposed neural pre-decoder and PyMatching. The neural
+\caption{\thesiscaptionfont Pipeline of the proposed neural pre-decoder and PyMatching. The neural
 module only decides whether to apply a local syndrome edit; PyMatching remains
 the final logical-frame decoder.}
 \label{fig:pipeline}
@@ -281,11 +293,23 @@ shot-level \texttt{needs\_edit\_logits}, and pooled shot features. The pooled
 features and local candidate features are then passed to the patch-head
 selector.
 
+The trunk is trained with the Adam optimizer. The default configuration uses
+batch size \(64\), learning rate \(10^{-3}\), and at most \(8\) epochs. The loss
+has three parts. First, a masked binary cross-entropy is applied at detector
+positions that have a known local-edit target. Second, a binary cross-entropy is
+applied to the shot-level \texttt{needs\_edit\_logits}. Third, for shots that
+need an edit, a ranking loss with margin \(1.0\) encourages the target edit to
+score above the identity candidate. The reported numbers use the checkpoint from
+the epoch with the best validation-family metric.
+
 \subsection{Local Motif Candidates}
 
 The model restricts syndrome edits to small local changes. The final setting
 uses \texttt{local\_motif\_selector}, which builds a restricted set of local
 motif candidates derived from train/validation hard-shot edit targets. The
+observed local-edit patterns are grouped into at most \(16\) motif classes, and
+at inference the motif placements with the largest summed per-detector edit
+probability are kept as the top \(32\) candidates. The
 identity candidate, corresponding to no edit, is always included, so raw
 PyMatching remains the internal fallback path of the selected mode.
 During target construction, local search is applied to raw PyMatching failures
@@ -309,15 +333,17 @@ coordinate summaries, nearby event/evidence values, and a small
 \(3\times3\times3\) local patch embedding. The selector is trained with Adam
 using learning rate \(5\times10^{-4}\) for at most \(6\) epochs. Its loss
 combines group cross-entropy for choosing the best candidate with a pairwise
-benefit/harm ranking loss using margin \(0.5\). Harmful candidates are weighted
-more strongly than missed beneficial candidates in the selector loss. This
-makes the selector a decoder-aware ranking module. Figure~\ref{fig:architecture}
+benefit/harm ranking loss of weight \(1.0\) and margin \(0.5\). Candidates that
+damage an already-correct shot are given harm weight \(2.0\), while nonzero
+candidates that leave a raw-incorrect shot still incorrect are given miss
+weight \(0.25\), so harmful candidates are weighted more strongly than missed
+beneficial candidates. This makes the selector a decoder-aware ranking module. Figure~\ref{fig:architecture}
 summarizes the model structure.
 
 \begin{figure*}[!tbp]
 \centering
 \predecoderfigure{fig2_model_architecture}{\textwidth}
-\caption{Architecture of the neural pre-decoder. The
+\caption{\thesiscaptionfont Architecture of the neural pre-decoder. The
 \texttt{SyndromeEditPreDecoder} builds a shared 3D feature volume and emits
 edit, needs-edit, and pooled-shot heads. The patch-head
 \texttt{CandidateEditSelector} then scores candidate features before the
@@ -332,8 +358,14 @@ Adoption thresholds are fixed using train/validation families only; held-out
 \texttt{stage\_c\_corr} results are not used to choose thresholds or seed-level
 adoption decisions. If validation gain over raw no-edit is insufficient, or if
 harm and selector-margin conditions fail, the selected mode falls back to raw
-no-edit. This safety rule reflects the fact that local edits can help some
-seeds while harming others.
+no-edit. Concretely, a validation delta of at least \(+0.02\) over raw no-edit
+is treated as sufficient evidence for adoption; a weak positive case is adopted
+only when the validation delta is at least \(+0.005\), the selector margin is at
+least \(0.5\), and the harmed count is at most \(2\); otherwise no edit is
+applied. The fact that only seeds 2 and 3 adopt local edits at d5, while the
+remaining seeds keep the raw syndrome, follows directly from this rule. This
+safety rule reflects the fact that local edits can help some seeds while harming
+others.
 
 \section{Experimental Setup}
 
@@ -359,7 +391,7 @@ accuracy over raw PyMatching. At d7, the selected-mode gain is
 \(+0.02\) pp, well below what would count as robust learned recovery.
 
 \begin{table*}[!tbp]
-\caption{Main accuracy on held-out \texttt{stage\_c\_corr}.}
+\caption{\thesiscaptionfont Main accuracy on held-out \texttt{stage\_c\_corr}.}
 \label{tab:main-results}
 \centering
 \scriptsize
@@ -377,7 +409,7 @@ d7 & \(0..57\) & 87.30\% & 87.32\% & 87.15\% & 98.44\% & \(+0.02\) pp \\
 \begin{figure*}[!tbp]
 \centering
 \predecoderfigure{fig3_main_accuracy_comparison}{\textwidth}
-\caption{Held-out accuracy by code distance. The selected predecoder improves
+\caption{\thesiscaptionfont Held-out accuracy by code distance. The selected predecoder improves
 over raw PyMatching at d3 and d5, while d7 remains close to raw even though
 oracle analysis finds recoverable local edits.}
 \label{fig:main-accuracy}
@@ -385,7 +417,8 @@ oracle analysis finds recoverable local edits.}
 
 \subsection{D3/D5 Robustness}
 
-Here, seed classes denote positive/neutral/negative selected-delta seed counts.
+Table~\ref{tab:d3d5-robustness} summarizes the d3/d5 robustness results. Here,
+seed classes denote positive/neutral/negative selected-delta seed counts.
 For d3, all seeds \(0..7\) have positive selected deltas even though the
 shot-level outcomes include both improved and harmed shots (\(205/151\)); the
 net seed-level effect is positive throughout. For d5, only two seeds adopt local
@@ -394,7 +427,7 @@ gain is therefore a selected-mode result from the adopted seeds, not uniformly
 active learned editing across all seeds.
 
 \begin{table}[!tbp]
-\caption{D3/D5 seed \(0..7\) robustness summary. Seed classes are
+\caption{\thesiscaptionfont D3/D5 seed \(0..7\) robustness summary. Seed classes are
 positive/neutral/negative seed counts.}
 \label{tab:d3d5-robustness}
 \centering
@@ -411,12 +444,13 @@ d5 & \(2/6/0\) & \(+0.56\) pp & \(56/10\) \\
 
 The seed-level bootstrap 95\% confidence intervals are approximately
 \([+0.45,+0.85]\) pp for d3 and \([0.00,+1.37]\) pp for d5. In the exact sign
-test, the one-sided p-value is \(0.0039\) for d3 and \(0.25\) for d5. Thus, the
+test, the one-sided p-value is \(0.0039\) for d3 and \(0.25\) for d5
+(Table~\ref{tab:paired-stats}). Thus, the
 d3 result is consistently positive across the checked seeds. In contrast, the
 d5 result is mainly a safety-gated selected-mode gain.
 
 \begin{table}[!tbp]
-\caption{D3/D5 paired seed-level statistics.}
+\caption{\thesiscaptionfont D3/D5 paired seed-level statistics.}
 \label{tab:paired-stats}
 \centering
 \footnotesize
@@ -431,7 +465,7 @@ d5 & \(2/6/0\) & 0.2500 & 0.2500 \\
 \end{table}
 
 \begin{table}[!tbp]
-\caption{D5 seed-level selected-mode fallback behavior.}
+\caption{\thesiscaptionfont D5 seed-level selected-mode fallback behavior.}
 \label{tab:d5-fallback}
 \centering
 \scriptsize
@@ -462,7 +496,8 @@ The candidate branch reveals the potential of the candidate space, but applying
 it without fallback also admits harmful edits. At d7, the candidate branch has
 \(161/251\) improved/harmed shots, meaning that harmful effects dominate. The
 selected mode avoids large degradation by choosing no-edit for most seeds, but
-it also misses most recoverable edits found by the oracle analysis. The results
+it also misses most recoverable edits found by the oracle analysis
+(Figure~\ref{fig:oracle-recovery}). The results
 below therefore keep the candidate, selected, and oracle branches separate.
 At d3, candidate and selected accuracy are both 93.53\%, so fallback does not
 change the result. In contrast, selected accuracy exceeds candidate accuracy by
@@ -486,22 +521,25 @@ structure.
 \begin{figure*}[!tbp]
 \centering
 \predecoderfigure{fig4_d7_oracle_gap_false_positive}{\textwidth}
-\caption{D7 oracle recoverability and false-positive candidate problem. Useful edits remain
+\caption{\thesiscaptionfont D7 oracle recoverability and false-positive candidate problem. Useful edits remain
 inside the candidate space, but the learned selector does not reliably choose
 validation-positive branches on held-out data.}
 \label{fig:d7-oracle}
 \end{figure*}
 
-The validation-to-held-out mismatch shows the same issue at the seed level. Among 22
+The validation-to-held-out mismatch shows the same issue at the seed level
+(Table~\ref{tab:d7-mismatch}). Among 22
 validation-positive candidate seeds, 13 are harmful on held-out evaluation and
 only 5 remain positive. Thus validation evidence alone is insufficient for safe
 candidate adoption. These 13 validation-positive but held-out harmful seeds are
 referred to as harmful false positives; the 4 held-out neutral seeds are not
 included in this harmful ratio. The harmful held-out outcome rate among
-validation-positive seeds is \(13/22=59.09\%\).
+validation-positive seeds is \(13/22=59.09\%\). Figure~\ref{fig:d7-scatter}
+plots this seed-level relationship between validation and held-out candidate
+delta.
 
 \begin{table}[!tbp]
-\caption{Mismatch between d7 validation class and held-out outcome.}
+\caption{\thesiscaptionfont Mismatch between d7 validation class and held-out outcome.}
 \label{tab:d7-mismatch}
 \centering
 \footnotesize
@@ -515,14 +553,14 @@ positive & 13 & 4 & 5 \\
 \end{tabular*}
 \end{table}
 
-\begin{figure*}[!tbp]
+\begin{figure}[!tbp]
 \centering
-\predecoderfigure{fig5_d7_validation_heldout_scatter}{\textwidth}
-\caption{Seed-level scatter of d7 validation delta versus held-out candidate
+\predecoderfigure{fig5_d7_validation_heldout_scatter}{\columnwidth}
+\caption{\thesiscaptionfont Seed-level scatter of d7 validation delta versus held-out candidate
 delta. Validation-positive evidence does not reliably transfer to held-out
 correlated noise.}
 \label{fig:d7-scatter}
-\end{figure*}
+\end{figure}
 
 There are 17 harmful candidate seeds, and the selected-mode guard blocks all
 \(17/17\) of them by falling back to raw no-edit. The safety policy leaves d7
@@ -541,7 +579,7 @@ ranking/generalization objective rather than simple threshold tuning.
 \begin{figure}[!tbp]
 \centering
 \predecoderfigure{fig6_oracle_recovery_distribution}{\columnwidth}
-\caption{Seed-level oracle recovery. D3 and d5 convert part of the recoverable
+\caption{\thesiscaptionfont Seed-level oracle recovery. D3 and d5 convert part of the recoverable
 local-edit space into selected-mode gains, while d7 selected mode uses almost
 none of the recoverable candidate space.}
 \label{fig:oracle-recovery}

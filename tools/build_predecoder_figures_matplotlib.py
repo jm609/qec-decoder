@@ -1070,7 +1070,7 @@ def build_figure_4(out_dir: Path) -> dict[str, Any]:
         ax,
         0.035,
         0.955,
-        "D7 limitation: oracle headroom, unreliable adoption",
+        "D7 limitation: candidate-oracle headroom, unreliable adoption",
         size=20,
         weight="bold",
         ha="left",
@@ -1086,7 +1086,7 @@ def build_figure_4(out_dir: Path) -> dict[str, Any]:
     )
 
     kpis = [
-        ("Oracle headroom", "58/58 seeds", _pp(d7_gap["mean_candidate_oracle_delta_over_no_edit"]), ACCENTS["green"]),
+        ("Candidate-oracle", "58/58 seeds", _pp(d7_gap["mean_candidate_oracle_delta_over_no_edit"]), ACCENTS["green"]),
         ("Candidate branch", "held-out mean", _pp(d7_gap["mean_candidate_delta_over_no_edit"]), ACCENTS["amber"]),
         ("False positives", "validation-positive", "13/22", ACCENTS["rose"]),
         ("Selected mode", "final gain", _pp(d7_gap["mean_selected_delta_over_no_edit"]), ACCENTS["blue"]),
@@ -1212,7 +1212,7 @@ def build_figure_4(out_dir: Path) -> dict[str, Any]:
     outputs = _save(fig, out_dir, "fig4_d7_oracle_gap_false_positive_v2")
     return {
         "figure": "fig4",
-        "title": "D7 limitation: oracle headroom, unreliable adoption",
+        "title": "D7 limitation: candidate-oracle headroom, unreliable adoption",
         "outputs": outputs,
     }
 
