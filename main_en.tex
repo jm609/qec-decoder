@@ -17,6 +17,7 @@
 
 \setlength{\emergencystretch}{2em}
 \hbadness=10000
+\renewcommand{\footnoterule}{}
 \graphicspath{{artifacts/figures/predecoder_v2/}{artifacts/figures/predecoder/}{figure/}}
 \providecommand{\href}[2]{#2}
 
@@ -76,8 +77,6 @@ only two of eight seeds adopt local edits. At d7, the selected-mode gain is only
 exist at d7. The current model often generates useful candidates, but the
 selector does not choose them reliably under held-out noise-family shift.
 \end{abstract}
-
-\keywords{quantum error correction, surface code, local edit, neural pre-decoder, PyMatching, syndrome decoding}
 
 \maketitle
 
@@ -158,7 +157,7 @@ same dataset. It clarifies which decision is learned and which decoder produces
 the final logical decision. The numerical claims below are limited to the
 Stage A/B/C noise families and the held-out \texttt{stage\_c\_corr} evaluation.
 
-\begin{table*}[t]
+\begin{table*}[!tbp]
 \caption{Position of this work relative to related decoding studies.}
 \label{tab:related-work}
 \centering
@@ -202,7 +201,7 @@ used only for final evaluation and post hoc oracle analysis. Each train family
 uses a fixed validation split of \(154\) shots, and the remaining samples are
 used to train the trunk and selector.
 
-\begin{table*}[t]
+\begin{table*}[!tbp]
 \caption{Dataset configuration by code distance. Each original dataset contains
 \(2048\) shots per family. Training local-edit targets are generated from fixed
 \(1024\)-shot subsets of the train/validation families, while the held-out
@@ -221,7 +220,7 @@ d7 & 7 & \([36,8,8,8]\) & A/B, \(1024\) shots each & C, \(1024\) shots & \(0..57
 \end{tabular*}
 \end{table*}
 
-\begin{table*}[t]
+\begin{table*}[!tbp]
 \caption{Noise families used in the experiments.}
 \label{tab:noise-family}
 \centering
@@ -250,7 +249,7 @@ The selector uses the transition between the raw PyMatching logical class and
 the logical class after a local edit as part of both its training signal and
 candidate features.
 
-\begin{figure*}[t]
+\begin{figure*}[!tbp]
 \centering
 \predecoderfigure{fig1_predecoder_pipeline}{\textwidth}
 \caption{Pipeline of the proposed neural pre-decoder and PyMatching. The neural
@@ -302,7 +301,7 @@ more strongly than missed beneficial candidates in the selector loss. This
 makes the selector a decoder-aware ranking module. Figure~\ref{fig:architecture}
 summarizes the model structure.
 
-\begin{figure*}[t]
+\begin{figure*}[!tbp]
 \centering
 \predecoderfigure{fig2_model_architecture}{\textwidth}
 \caption{Architecture of the neural pre-decoder. The
@@ -346,7 +345,7 @@ results for d3, d5, and d7. At d3 and d5, the selected predecoder improves mean
 accuracy over raw PyMatching. At d7, the selected-mode gain is
 \(+0.02\) pp, well below what would count as robust learned recovery.
 
-\begin{table*}[t]
+\begin{table*}[!tbp]
 \caption{Main accuracy on held-out \texttt{stage\_c\_corr}.}
 \label{tab:main-results}
 \centering
@@ -362,7 +361,7 @@ d7 & \(0..57\) & 87.30\% & 87.32\% & 87.15\% & 98.44\% & \(+0.02\) pp \\
 \end{tabular*}
 \end{table*}
 
-\begin{figure*}[t]
+\begin{figure*}[!tbp]
 \centering
 \predecoderfigure{fig3_main_accuracy_comparison}{\textwidth}
 \caption{Held-out accuracy by code distance. The selected predecoder improves
@@ -381,7 +380,7 @@ selector edits, while the other six seeds fall back to raw no-edit. The d5 mean
 gain is therefore a selected-mode result from the adopted seeds, not uniformly
 active learned editing across all seeds.
 
-\begin{table}[t]
+\begin{table}[!tbp]
 \caption{D3/D5 seed \(0..7\) robustness summary. Seed classes are
 positive/neutral/negative seed counts.}
 \label{tab:d3d5-robustness}
@@ -403,7 +402,7 @@ test, the one-sided p-value is \(0.0039\) for d3 and \(0.25\) for d5. Thus, the
 d3 result is consistently positive across the checked seeds. In contrast, the
 d5 result is mainly a safety-gated selected-mode gain.
 
-\begin{table}[t]
+\begin{table}[!tbp]
 \caption{D3/D5 paired seed-level statistics.}
 \label{tab:paired-stats}
 \centering
@@ -418,7 +417,7 @@ d5 & \(2/6/0\) & 0.2500 & 0.2500 \\
 \end{tabular*}
 \end{table}
 
-\begin{table*}[t]
+\begin{table*}[!tbp]
 \caption{D5 seed-level selected-mode fallback behavior.}
 \label{tab:d5-fallback}
 \centering
@@ -456,6 +455,8 @@ change the result. In contrast, selected accuracy exceeds candidate accuracy by
 \(+0.25\) pp at d5 and \(+0.17\) pp at d7, quantifying the effect of the safety
 policy in blocking harmful candidates.
 
+\newpage
+
 \section{D7 Limitation Analysis}
 
 The d7 selected-mode delta is only \(+0.02\) pp. However, the target
@@ -470,7 +471,7 @@ harmful seeds, with mean actual candidate delta about \(-0.15\) pp.
 Figure~\ref{fig:d7-oracle} summarizes the oracle recoverability and false-positive
 structure.
 
-\begin{figure*}[t]
+\begin{figure*}[!tbp]
 \centering
 \predecoderfigure{fig4_d7_oracle_gap_false_positive}{\textwidth}
 \caption{D7 oracle recoverability and false-positive candidate problem. Useful edits remain
@@ -487,7 +488,7 @@ referred to as harmful false positives; the 4 held-out neutral seeds are not
 included in this harmful ratio. The harmful held-out outcome rate among
 validation-positive seeds is \(13/22=59.09\%\).
 
-\begin{table}[t]
+\begin{table}[!tbp]
 \caption{Mismatch between d7 validation class and held-out outcome.}
 \label{tab:d7-mismatch}
 \centering
@@ -502,7 +503,7 @@ positive & 13 & 4 & 5 \\
 \end{tabular*}
 \end{table}
 
-\begin{figure*}[t]
+\begin{figure*}[!tbp]
 \centering
 \predecoderfigure{fig5_d7_validation_heldout_scatter}{\textwidth}
 \caption{Seed-level scatter of d7 validation delta versus held-out candidate
@@ -525,7 +526,7 @@ pairwise top-k objectives also failed to preserve true positives while blocking
 false positives. The next d7 improvement requires a redesigned selector
 ranking/generalization objective rather than simple threshold tuning.
 
-\begin{figure*}[t]
+\begin{figure*}[!tbp]
 \centering
 \predecoderfigure{fig6_oracle_recovery_distribution}{\textwidth}
 \caption{Seed-level oracle recovery. D3 and d5 convert part of the recoverable
@@ -533,6 +534,8 @@ local-edit space into selected-mode gains, while d7 selected mode uses almost
 none of the recoverable candidate space.}
 \label{fig:oracle-recovery}
 \end{figure*}
+
+\newpage
 
 \section{Discussion}
 
@@ -568,13 +571,13 @@ candidate set.
 
 \section*{Reproducibility Note}
 
-The result tables are based on the archived pre-decoder summary documents in
-the repository, including the final result tables, paired statistics,
-oracle-recovery distribution, d7 harmful-edit taxonomy, and reproducibility
-package. The final consistency check is recorded under
-\texttt{artifacts/eval/nn/} with \(37/37\) checks and \(0\) failures.
-Hyperparameter-sensitivity notes are archived separately in
-\texttt{PREDECODER\_HYPERPARAMETER\_SENSITIVITY.md}.
+The result tables are based on archived pre-decoder summaries in the
+repository: final result tables, paired statistics, oracle-recovery
+distribution, d7 harmful-edit taxonomy, and the reproducibility package. The
+final consistency check reports \(37/37\) checks and \(0\) failures.
+Hyperparameter-sensitivity notes are kept as a separate supplementary memo.
+
+\newpage
 
 \bibliographystyle{unsrtnat}
 \bibliography{main}
