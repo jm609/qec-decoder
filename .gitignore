@@ -25,11 +25,29 @@ models/saved_weights/
 
 # Notebook / editor / OS
 .claude/
+.agents/
+.codex/
 .ipynb_checkpoints/
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+
+# Local scratch / review work
+/.tmp*/
+
+# Keep the public repository focused on runnable source and the manuscript.
+# Root-level Markdown files are working notes unless explicitly allowlisted.
+/*.md
+!/README.md
+!/AGENTS.md
+
+# Personal root-level text files (requirements remains part of the project).
+/*.txt
+!/requirements.txt
+
+# Historical prototypes remain available locally but are not published.
+/legacy_archive/
 
 # Generated experiment artifacts
 artifacts/**
