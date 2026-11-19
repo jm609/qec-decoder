@@ -37,7 +37,7 @@ Schema notes
   logical_x_flip, logical_z_flip, and logical_class4 targets from one shot
 """
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 import argparse
@@ -86,6 +86,7 @@ from noise_si1000 import (
     summarize_si1000_circuit,
 )
 from noise_willowcore import (
+    bias_willowcore_data_paulis,
     build_willowcore_memory_circuit,
     export_noisy_metadata as export_willow_metadata,
     summarize_willowcore_circuit,
@@ -306,6 +307,8 @@ def _build_stage_b_or_c(
     variant: str,
     physical_error_rate: float,
     shots: int,
+    local_seed: int = 12345,
+    zz_factor: float | None = None,
 ) -> BuiltFamily:
     spec = FAMILY_SPECS[family]
     if family == "stage_b_local":
@@ -316,6 +319,7 @@ def _build_stage_b_or_c(
             variant=variant,
             physical_error_rate=physical_error_rate,
             shots=shots,
+            local_seed=local_seed,
         )
     elif family == "stage_c_corr":
         cfg = make_stage_c_config(
@@ -325,10 +329,16 @@ def _build_stage_b_or_c(
             variant=variant,
             physical_error_rate=physical_error_rate,
             shots=shots,
+            local_seed=local_seed,
         )
     else:
         raise ValueError(f"Unsupported family for Willow builder: {family!r}")
 
+    if zz_factor is not None:
+        if family != "stage_c_corr":
+            raise ValueError("zz_factor requires stage_c_corr")
+        cfg = replace(cfg, willow=replace(cfg.willow, corr=replace(cfg.willow.corr, zz_factor=zz_factor)))
+        cfg.validate()
     circuit = build_willowcore_memory_circuit(cfg)
     upstream_metadata = export_willow_metadata(cfg, circuit)
     upstream_summary = summarize_willowcore_circuit(cfg, circuit).to_dict()
@@ -358,7 +368,11 @@ def build_family(
     variant: str,
     physical_error_rate: float,
     shots: int,
+    local_seed: int = 12345,
+    zz_factor: float | None = None,
 ) -> BuiltFamily:
+    if family not in {"stage_b_local", "stage_c_corr"} and (local_seed != 12345 or zz_factor is not None):
+        raise ValueError("Local noise configuration requires Stage B or C")
     if family == "ideal":
         return _build_ideal(
             distance=distance,
@@ -384,6 +398,8 @@ def build_family(
             variant=variant,
             physical_error_rate=physical_error_rate,
             shots=shots,
+            local_seed=local_seed,
+            zz_factor=zz_factor,
         )
     raise ValueError(f"Unknown family: {family!r}")
 
@@ -477,7 +493,12 @@ def save_family_dataset(
     shots: int,
     seed: int | None,
     overwrite: bool,
+    local_seed: int = 12345,
+    zz_factor: float | None = None,
+    data_pauli_z_bias: float | None = None,
 ) -> Path:
+    if data_pauli_z_bias is not None and (family != "stage_c_corr" or variant != "stim_rotated"):
+        raise ValueError("Data Pauli Z bias requires the rotated Stage C scaffold")
     built = build_family(
         family=family,
         distance=distance,
@@ -486,7 +507,22 @@ def save_family_dataset(
         variant=variant,
         physical_error_rate=physical_error_rate,
         shots=shots,
+        local_seed=local_seed,
+        zz_factor=zz_factor,
     )
+
+    circuit = built.circuit
+    dem_kwargs = built.dem_kwargs.copy()
+    bias_metadata = {}
+    if data_pauli_z_bias is not None:
+        circuit = bias_willowcore_data_paulis(circuit, distance=distance, eta=data_pauli_z_bias)
+        if data_pauli_z_bias != 0.5:
+            dem_kwargs["approximate_disjoint_errors"] = True
+        bias_metadata["data_pauli_z_bias"] = {
+            "eta": data_pauli_z_bias,
+            "definition": "p_Z / (p_X + p_Y), p_X = p_Y",
+            "scope": "data-qubit gate and idle DEPOLARIZE1, fixed total probability",
+        }
 
     family_dir = _family_output_dir(
         out_root,
@@ -505,7 +541,6 @@ def save_family_dataset(
         shutil.rmtree(family_dir)
     family_dir.mkdir(parents=True, exist_ok=False)
 
-    circuit = built.circuit
     logical_bell_readout: dict[str, Any] | None = None
     if target_mode == BELL_PAIR_Z_READOUT_MODE:
         circuit, bell_readout = build_bell_pair_z_readout_circuit(
@@ -543,7 +578,7 @@ def save_family_dataset(
         checkerboard_type_map=get_validated_checkerboard_type_map(built.cfg),
     )
 
-    dem = circuit.detector_error_model(**built.dem_kwargs)
+    dem = circuit.detector_error_model(**dem_kwargs)
     circuit_text = str(circuit)
     dem_text = str(dem)
 
@@ -637,7 +672,7 @@ def save_family_dataset(
         config_obj = cfg_obj.to_dict()
     else:
         config_obj = asdict(cfg_obj)
-    _write_json(config_path, {"config": config_obj})
+    _write_json(config_path, {"config": config_obj, **bias_metadata})
 
     sampling_metadata: dict[str, Any] = {
         "shots": int(shots),
@@ -816,8 +851,9 @@ def save_family_dataset(
         "logical_frame_structure": logical_frame_structure,
         "logical_bell_pair_readout": logical_bell_readout,
         "qc_stats": qc_stats,
+        **bias_metadata,
         "dem": {
-            "kwargs": built.dem_kwargs,
+            "kwargs": dem_kwargs,
             "num_detectors": int(dem.num_detectors),
             "num_observables": int(dem.num_observables),
         },

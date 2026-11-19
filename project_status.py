@@ -58,32 +58,32 @@ PROJECT_COMPONENT_STATUS: tuple[ComponentStatus, ...] = (
     ComponentStatus(
         path="noise_willowcore.py",
         category="modify",
-        summary="Stage B/C Willow-inspired noisy circuit generation.",
-        next_action="Keep current B/C families and extend with new noise families for transfer tests.",
+        summary="Stage B/C Willow-inspired noise with fixed-total data-qubit Pauli-bias redistribution.",
+        next_action="Preserve channel-probability checks and compare edited predictions against the same decoder prior.",
     ),
     ComponentStatus(
         path="sample_dataset.py",
         category="modify",
         summary="Primary dataset generator and schema owner.",
-        next_action="Continue migrating targets from binary logical flip toward logical-axis and later logical-class supervision.",
+        next_action="Preserve the Bell-pair class4 target convention, local-map seeds, and explicit bias metadata.",
     ),
     ComponentStatus(
-        path="MAIN_TARGET_WORK_SCHEDULE.md",
+        path="docs/thesis/README.md",
         category="keep",
-        summary="Defines the corrected main target hierarchy: 'Convolutional Neural Decoder for Surface Codes' is now an output/evaluation-format anchor rather than a required architecture, with d3/d5/d7 PyMatching baselines complete and the pre-decoder branch promoted as the most promising model family.",
-        next_action="Use together with RESEARCH_PLAN_PREDECODER_MAIN.md as the broader schedule and context map.",
+        summary="Current research index linking corrected-input methods, frozen evaluation protocols, and final independent results.",
+        next_action="Use as the public entry point; distinguish candidate coverage from demonstrated selection accuracy.",
     ),
     ComponentStatus(
-        path="RESEARCH_PLAN_PREDECODER_MAIN.md",
+        path="main_d7_en.tex",
         category="keep",
-        summary="Fixes the current research topic as transition-aware neural pre-decoding for surface-code logical-frame inference, with title candidates, novelty positioning, NVIDIA related-work boundaries, success criteria, and phased execution plan; the d3 selected gain has reproduced; the true patch-head selector now gives full d5 PyMatching-beating selected runs on seeds 1 and 3, but selected-mode adoption is still seed-sensitive.",
-        next_action="Treat as the primary research plan and stabilize selector calibration / selected-mode adoption across d5 patch-head seeds.",
+        summary="Current English manuscript covering same-shot failure diagnosis, generator controls, selection, gating, and biased-noise follow-ups.",
+        next_action="Keep numerical claims aligned with the Korean manuscript and independent map-level intervals; verify rendered layout in XeLaTeX.",
     ),
     ComponentStatus(
-        path="MODEL_SELECTION_D3_D5_D7.md",
+        path="docs/thesis/PREDECODER_INDEPENDENT_REVALIDATION.md",
         category="keep",
-        summary="Records the d3/d5/d7 class4 baseline table, direct neural collapse evidence, and local-edit oracle headroom that makes the PyMatching-assist pre-decoder the leading next model family.",
-        next_action="Keep updated as new selected-mode pre-decoder results are produced.",
+        summary="Corrected-input revalidation at distances 3, 5, and 7, including the all-raw d7 family-gate outcome.",
+        next_action="Retain the separation between distance-level adoption and subsequent d7 shot-level selection tests.",
     ),
     ComponentStatus(
         path="geometry/rotated_rect.py",
@@ -106,8 +106,8 @@ PROJECT_COMPONENT_STATUS: tuple[ComponentStatus, ...] = (
     ComponentStatus(
         path="decoders/research_noise_aware_3d.py",
         category="modify",
-        summary="Main research decoder with geometry and noise-context channels.",
-        next_action="Treat as the active model line for multi-noise axis-wise and logical_class4 experiments until a new decoder architecture is designed.",
+        summary="Neural decoder and shared volume builder with geometry, noise context, and a zeroed reserved label-context channel.",
+        next_action="Preserve label-independent inputs and tensor width when loading or retraining models.",
     ),
     ComponentStatus(
         path="decoders/factorized_logical_frame_decoder.py",
@@ -124,8 +124,8 @@ PROJECT_COMPONENT_STATUS: tuple[ComponentStatus, ...] = (
     ComponentStatus(
         path="decoders/syndrome_edit_predecoder.py",
         category="modify",
-        summary="First neural syndrome-edit pre-decoder that predicts detector-bit edit masks plus a needs_edit head, then hands the edited syndrome to unchanged PyMatching; it now supports benefit/harm candidate scoring, logical-transition candidate features, selector nonzero-bias calibration, harm-margin loss, local-motif candidate selection, corrected benefit/harm-compatible router labels, transition-prior/top-k ablations, flat/group-balanced BCE candidate-compatibility heads, an auxiliary pairwise compatibility ranker, a direct main-selector pairwise benefit/harm term, motif-evidence merging for duplicate candidates, raw-policy candidate-pool disabling, geometry/placement-aware candidate features, local motif pattern/anchor candidate features, handcrafted anchor-local evidence candidate features, opt-in radius-1 local-patch candidate features, and an opt-in learned patch-head selector branch; patch-head now beats full d5 PyMatching on selected seeds 1 and 3.",
-        next_action="Follow RESEARCH_PLAN_PREDECODER_MAIN.md: keep patch-head as the active representation and stabilize selector calibration / selected-mode adoption across seeds.",
+        summary="Neural local-edit candidate generator and transition-aware selector with explicit no-edit fallback, corrected input context, and stored split provenance.",
+        next_action="Use frozen independent protocols. Current d7 selection and bias-specific linear-head evaluations do not establish added accuracy.",
     ),
     ComponentStatus(
         path="tools/build_dual_axis_manifest.py",

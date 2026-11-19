@@ -169,7 +169,7 @@ def _build_context_planes(
                     float(circuit.get("rounds", 0)) / 100.0,
                     float(circuit.get("num_detectors", 0)) / 4096.0,
                     float(qc_stats.get("detector_event_fraction", 0.0)),
-                    float(qc_stats.get("logical_flip_fraction", 0.0)),
+                    0.0,  # Reserve the old slot without exposing label-derived metadata.
                     float(layout.valid_mask.mean()) if layout.valid_mask.size else 0.0,
                 ],
                 dtype=np.float32,
@@ -187,7 +187,7 @@ def _build_context_planes(
         "rounds_norm",
         "num_detectors_norm",
         "detector_event_fraction",
-        "logical_flip_fraction",
+        "reserved_label_context",
         "occupancy_fraction",
     ] + noise_signature_names
     planes = np.broadcast_to(
@@ -231,6 +231,7 @@ def _prepare_loaded_family(
 
     bundle_info = {
         "representation": "noise_aware_volume_3d",
+        "label_context_policy": "zero_reserved",
         "shape": {
             "batch": int(x.shape[0]),
             "channels": int(x.shape[1]),

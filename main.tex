@@ -91,7 +91,8 @@ detector edit 후보를 만들고, 각 후보를 적용하기 전후의 PyMatchi
 반영한다는 의미이다. 신경망은 최종 correction chain이나 logical frame을 직접
 출력하지 않는다.
 선택된 edit 또는 원본 syndrome만 PyMatching에 전달하고, 최종 판정은 PyMatching이
-수행한다. 후보 채택 threshold는 train/validation family에서만 정했다.
+수행한다. 실행 시 채택 판단에는 train/validation 통계를 사용했으나,
+d7 guard 설계는 Stage C 평가 결과를 본 뒤 수정되었다.
 
 학습에 사용하지 않은 \texttt{stage\_c\_corr} 평가에서 선택 모드의 pre-decoder는
 d3와 d5에 대해 raw PyMatching 대비 각각 \(+0.66\) pp, \(+0.56\) pp의 평균 정확도
@@ -99,6 +100,9 @@ d3와 d5에 대해 raw PyMatching 대비 각각 \(+0.66\) pp, \(+0.56\) pp의 �
 해석해야 한다. d7에서는 선택 모드 향상이 \(+0.02\) pp에 그쳤다. Oracle 분석에서는
 d7에도 회복 가능한 local edit 후보가 남아 있었으므로, 현재 구조의 병목은 후보 생성
 자체보다 selector의 후보 정렬과 held-out noise family에 대한 일반화에 가깝다.
+다만 이 수치는 정답 집계값을 입력에 포함한 기존 실행의 기록이다.
+해당 입력 경로를 제거했으며, 정답 비의존 입력으로 재학습하고 독립 평가를
+완료하기 전까지 위 향상을 검증된 일반화 성능으로 해석하지 않는다.
 \end{abstract}
 
 \maketitle
@@ -223,18 +227,30 @@ physical-noise summary 등을 함께 포함하여 36-channel syndrome/noise volu
 volume의 크기만 distance에 따라 달라진다. 예를 들어 d3, d5, d7의 입력 shape은
 각각 \([36,4,4,4]\), \([36,6,6,6]\), \([36,8,8,8]\)이다.
 
+2026년 11월 입력 경로 감사에서 기존 context에 dataset 정답의 평균인
+\texttt{logical\_flip\_fraction}이 포함됨을 확인했다. 이 값은 해당 family의
+평가 라벨에서도 계산되므로 정답 비의존 추론 조건을 위반한다. 수정 코드에서는
+입력 폭을 유지하면서 해당 채널을 0으로 고정한 reserved channel로 바꿨다.
+이하 표의 수치는 수정 전 checkpoint와 입력으로 얻은 역사적 결과이며,
+수정 후 재학습 결과가 아니다. 관측 syndrome의 event fraction과 시뮬레이터의
+잡음 설명은 별도 입력 가정으로 유지한다.
+
 각 distance의 원본 manifest는 family별 \(2048\) shots로 생성했다. 학습용 local edit
 target은 train/validation family의 고정된 \(1024\)-shot subset에서 생성했다.
 본문에 보고한 주요 결과는 학습에 사용하지 않은 \texttt{stage\_c\_corr}의
-\(1024\) shots/seed에서 계산했고, held-out local edit 탐색은 평가 후 oracle 회복
-가능성 분석에만 사용했다. 각 train family에서는 고정된 validation split
-\(154\) shots를 사용했고, 나머지 샘플이 trunk와 selector 학습에 사용된다.
+동일한 \(1024\) shots를 모든 model seed에서 재사용해 계산했다. Local edit 탐색
+결과는 사후 oracle 분석에 사용했지만, Stage C 결과는 후속 guard 설계에도
+참고했으므로 독립적인 최종 검증 집합으로 볼 수 없다. 각 train family에서는
+validation \(154\) shots를 사용하며, 학습에는 split의 train 부분만 사용한다.
+기본 0.7/0.15/0.15 분할에서는 train/validation/test가 각각
+\(717/154/153\) shots이다. 내부 test 부분을 학습에 합치지 않는다.
 Table~\ref{tab:dataset-config}에 distance별 데이터 구성을 정리했다.
 
 \begin{table*}[!tbp]
 \caption{\thesiscaptionfont Distance별 데이터 구성. 원본 dataset은 family별 \(2048\) shots이고, 학습용
 local edit target은 train/validation family의 고정된 \(1024\)-shot subset에서
-생성했다. Held-out family의 \(1024\) shots는 최종 평가와 oracle 분석에만 사용했다.}
+생성했다. Stage C의 동일 \(1024\) shots를 model seed별로 재사용했으며,
+이 평가 결과는 후속 설계에도 참고되었다.}
 \label{tab:dataset-config}
 \centering
 \scriptsize
@@ -358,9 +374,11 @@ patch-head \texttt{CandidateEditSelector}가 candidate feature를 점수화하�
 
 \subsection{Selected-mode safety}
 
-Candidate branch가 항상 최종 결과에 반영되는 것은 아니다. 채택 조건과 threshold는
-train/validation family에서만 정했고, held-out \texttt{stage\_c\_corr} 결과는
-threshold나 seed별 채택 여부를 정하는 데 사용하지 않았다. Validation family에서
+Candidate branch가 항상 최종 결과에 반영되는 것은 아니다. 개별 실행의 채택
+함수는 train/validation 통계를 읽는다. 그러나 연구 이력에서는 d7 seed54의
+Stage C 성능 하락을 확인한 뒤 minimum-nonzero support guard를 도입하고
+기존 seed들에 사후 적용했다. 따라서 guard 설계와 평가 데이터가 독립적이었다고
+주장할 수 없다. Validation family에서
 후보 적용이 raw no-edit 대비 충분한 validation gain을 보이지 않거나, 해로운 후보
 수와 selector margin 조건을 넘어서면 선택 모드는 보정을 적용하지 않고 원본
 syndrome을 그대로 PyMatching에 전달한다. 이 후보 우선 안전 정책은 local edit이
@@ -373,6 +391,14 @@ harmed count가 \(2\) 이하일 때만 채택했다. 그 밖의 경우에는 보
 d5에서 seed 2와
 seed 3만 local edit을 채택하고 나머지 seed가 원본 syndrome을 유지한 것은 이
 조건을 그대로 적용한 결과이다.
+
+위 threshold 설명은 약한 양의 증거 분기의 요약이다. 실제 선택용 metric은
+family별 \(\mathrm{accuracy}+0.001\,\mathrm{macroF1}\)의 평균이다.
+강한 증거 분기는 약한 증거용 harm/support cap을 거치지 않으며, 거의 동률인
+경우에도 높은 margin과 충분한 nonzero support로 채택할 수 있다.
+d7에는 추가 margin 상한, plateau, minimum-support 조건이 적용되었다.
+정확한 실행 규칙은 checkpoint 설정을 기준으로 하며, 본문의 순이득은 이 선택용
+metric과 구분해 정확도 차이로 계산한다.
 
 \section{실험 설정}
 
@@ -452,6 +478,9 @@ d5가 약 \([0.00,+1.37]\) pp이다. Exact sign test에서도 d3의 one-sided p-
 \(0.0039\)인 반면, d5는 \(0.25\)이다~(Table~\ref{tab:paired-stats}). 따라서 d3는 검사한 seed 전부에서 양의
 결과를 보인 사례로 제시할 수 있지만, d5는 positive mean과 선택 조건의 안정성을
 중심으로 해석해야 한다.
+이 구간과 p-value는 같은 평가 shot을 공유하는 model seed 간 변동을 요약한다.
+독립 shot 또는 새 잡음 맵의 일반화 불확실성을 나타내지 않으며, 입력 누출과
+사후 설계 선택의 영향도 반영하지 않는다.
 
 \begin{table}[!tbp]
 \caption{\thesiscaptionfont d3/d5 paired seed-level statistics.}
@@ -570,7 +599,7 @@ Validation-positive evidence가 held-out correlated noise에서 그대로 유지
 
 d7에 대해서는 threshold sweep도 추가로 수행했지만, 현재 model family 안에서는
 합리적인 해결책을 찾지 못했다. 약 \(18.3\)만 개의 scalar adoption-threshold
-policy를 검사했지만, 사전에 정의한 preserve/recover/block seed-level 조건을
+policy를 검사했지만, 기존 평가 결과에서 정한 preserve/recover/block seed-level 조건을
 동시에 만족한 policy는 없었다. 정확한 sentinel seed 집합은 재현성 패키지에
 기록했다.
 유익한 후보와 해로운 후보를 직접 구분하도록 학습 목표를 바꾸거나, 후보 간
@@ -589,6 +618,13 @@ selected 결과로 회복하지만, d7 선택 모드는 candidate-oracle 기준�
 
 \section{논의}
 
+입력 누출과 Stage C를 반복 참고한 설계 과정 때문에 본문의 성능표는 탐색적
+기록으로 제한한다. 정답 집계 채널을 0으로 바꾼 기존 checkpoint의 재평가는
+입력 민감도 점검일 뿐, 수정된 학습 절차의 검증을 대신하지 않는다.
+재학습 시에는 학습·검증 분할과 설정을 저장하고, 독립적인 새 맵과 shot에서
+최종 성능을 평가해야 한다. 기존 \(17/17\) harmful seed 차단 결과도 새 분포에
+대한 안전 보장으로 해석하지 않는다.
+
 d3/d5 결과에서 중요한 점은 보정 자체보다 채택 조건이다. d5에서는 candidate
 branch만 보면 해로운 seed가 있었지만, validation에서 정한 조건을 통과한 seed 2와
 seed 3에서만 보정을 적용했다. 이 결과는 제한된 후보 집합에서 PyMatching에 도움이
@@ -604,6 +640,9 @@ pre-decoder의 후보 생성과 후보 채택을 분리해 보기 위해 정한 
 대규모 hardware decoder 성능을 주장하는 범위는 아니다.
 
 \section{결론}
+
+아래 수치는 수정 전 실행의 관측값이며, 입력 누출을 제거한 재학습과 독립
+재평가 전까지 성능 개선 주장은 잠정적이다.
 
 본 논문에서는 PyMatching을 대체하지 않고, 그 앞단에서 작은 detector edit을
 선택하는 신경망 사전 디코더를 구현했다. d3/d5의 held-out

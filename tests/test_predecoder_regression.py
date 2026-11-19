@@ -229,10 +229,10 @@ class SelectorHelperRegressionTest(unittest.TestCase):
 class SummaryArtifactRegressionTest(unittest.TestCase):
     def test_final_result_tables_match_consolidated_json(self) -> None:
         _require_path(ROOT / "artifacts/eval/nn/sedp_predecoder_consolidated_evidence_summary.json")
-        _require_path(ROOT / "PREDECODER_FINAL_RESULT_TABLES.md")
+        _require_path(ROOT / final_consistency.DEFAULT_RESULT_TABLES)
         summary = final_consistency.build_summary(
             ROOT / "artifacts/eval/nn/sedp_predecoder_consolidated_evidence_summary.json",
-            ROOT / "PREDECODER_FINAL_RESULT_TABLES.md",
+            ROOT / final_consistency.DEFAULT_RESULT_TABLES,
         )
         self.assertTrue(summary["pass"])
         self.assertEqual(summary["num_failed"], 0)
