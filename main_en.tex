@@ -80,8 +80,9 @@ does not mean a separate temporal transition model; it means that candidate
 selection uses the downstream decoder decision before and after a local edit.
 The neural model does not output a correction chain or a final logical frame.
 It only passes either an edited syndrome or the raw no-edit syndrome to
-PyMatching, which remains the final decoder. Adoption thresholds are fixed
-using train/validation families only.
+PyMatching, which remains the final decoder. Runtime adoption uses
+train/validation statistics, but the d7 guard was revised after inspecting
+Stage C evaluation outcomes.
 
 On the held-out \texttt{stage\_c\_corr} evaluation, selected-mode pre-decoding
 improves mean accuracy over raw PyMatching by \(+0.66\) pp for d3 and
@@ -90,6 +91,10 @@ only two of eight seeds adopt local edits. At d7, the selected-mode gain is only
 \(+0.02\) pp. Oracle analysis indicates that recoverable local edits still
 exist at d7. The current model often generates useful candidates, but the
 selector does not choose them reliably under held-out noise-family shift.
+These numbers are historical observations from runs whose inputs included a
+label-derived aggregate. That input path has been removed. The reported gains
+remain provisional until label-independent retraining and fresh independent
+evaluation are completed.
 \end{abstract}
 
 \maketitle
@@ -218,19 +223,31 @@ summary channels. Channel semantics are fixed across code distances, while the
 spatial and temporal volume sizes grow with distance. The input shapes for d3,
 d5, and d7 are \([36,4,4,4]\), \([36,6,6,6]\), and \([36,8,8,8]\), respectively.
 
+A November 2026 input audit found that the legacy context included
+\texttt{logical\_flip\_fraction}, computed from the dataset's target labels.
+For an evaluation family, this exposes an aggregate of evaluation labels to
+the model. The corrected builder keeps the input width and sets this slot to
+zero as a reserved channel. The tables below retain historical results from
+the legacy checkpoints and inputs; they are not results of corrected
+retraining. Observed syndrome event fractions and simulator noise descriptions
+remain separate assumptions about the available input context.
+
 Each original manifest contains \(2048\) shots per family. Training local-edit
 targets are generated from fixed \(1024\)-shot subsets of the train/validation
-families. The \(1024\) held-out shots per seed in \texttt{stage\_c\_corr} are
-used only for final evaluation and post hoc oracle analysis. Each train family
-uses a fixed validation split of \(154\) shots, and the remaining samples are
-used to train the trunk and selector. Table~\ref{tab:dataset-config} summarizes
+families. All model seeds share the same \(1024\) Stage C evaluation shots.
+The local-edit search supplies post hoc oracle analysis, but Stage C outcomes
+also informed later guard design, so this is not an untouched final test set.
+Each training family uses \(154\) validation shots; only the train split is
+used for trunk and selector training. The default 0.7/0.15/0.15 split gives
+\(717/154/153\) train/validation/test shots. The internal test subset is not
+merged into training. Table~\ref{tab:dataset-config} summarizes
 the dataset configuration by code distance.
 
 \begin{table*}[!tbp]
 \caption{\thesiscaptionfont Dataset configuration by code distance. Each original dataset contains
 \(2048\) shots per family. Training local-edit targets are generated from fixed
 \(1024\)-shot subsets of the train/validation families, while the held-out
-\(1024\) shots are used only for final evaluation and oracle analysis.}
+\(1024\) Stage C shots are reused across model seeds and informed later design.}
 \label{tab:dataset-config}
 \centering
 \scriptsize
@@ -354,9 +371,11 @@ selected edit or fallback path is passed to PyMatching.}
 \subsection{Selected-Mode Safety}
 
 The selected mode applies a candidate only after it passes the adoption rule.
-Adoption thresholds are fixed using train/validation families only; held-out
-\texttt{stage\_c\_corr} results are not used to choose thresholds or seed-level
-adoption decisions. If validation gain over raw no-edit is insufficient, or if
+Each runtime adoption decision reads train/validation statistics. However,
+the experiment history records that the d7 minimum-nonzero support guard was
+introduced after seed54 harmed Stage C performance, then applied post hoc to
+earlier seeds. Guard design was therefore not independent of evaluation
+outcomes. If validation gain over raw no-edit is insufficient, or if
 harm and selector-margin conditions fail, the selected mode falls back to raw
 no-edit. Concretely, a validation delta of at least \(+0.02\) over raw no-edit
 is treated as sufficient evidence for adoption; a weak positive case is adopted
@@ -366,6 +385,14 @@ applied. The fact that only seeds 2 and 3 adopt local edits at d5, while the
 remaining seeds keep the raw syndrome, follows directly from this rule. This
 safety rule reflects the fact that local edits can help some seeds while harming
 others.
+
+This threshold description summarizes the weak-positive branch. The actual
+selection metric averages \(\mathrm{accuracy}+0.001\,\mathrm{macroF1}\) over
+families. The strong-evidence branch bypasses weak-positive harm/support caps;
+a near-tie branch can also adopt with a high margin and enough nonzero support.
+D7 adds maximum-margin, plateau, and minimum-support guards. Checkpoint
+settings define the exact executed policy. Reported net gains use accuracy
+differences, not this selection metric.
 
 \section{Experimental Setup}
 
@@ -448,6 +475,9 @@ test, the one-sided p-value is \(0.0039\) for d3 and \(0.25\) for d5
 (Table~\ref{tab:paired-stats}). Thus, the
 d3 result is consistently positive across the checked seeds. In contrast, the
 d5 result is mainly a safety-gated selected-mode gain.
+These intervals and p-values describe model-seed variation conditional on the
+same evaluation shots. They do not quantify uncertainty across independent
+shots or new noise maps, or account for label leakage and adaptive design.
 
 \begin{table}[!tbp]
 \caption{\thesiscaptionfont D3/D5 paired seed-level statistics.}
@@ -569,7 +599,8 @@ emitted as the final output.
 
 Additional d7 threshold sweeps did not resolve this within the current model
 family. A scalar adoption-threshold grid checked \(183040\)
-policies, but none satisfied the predefined preserve/recover/block conditions.
+policies, but none satisfied the preserve/recover/block conditions derived from
+previously inspected evaluation outcomes.
 The exact sentinel seed sets are recorded in the reproducibility package.
 Cross-family hard positive-vs-negative objectives and candidate-compatibility
 pairwise top-k objectives also failed to preserve true positives while blocking
@@ -586,6 +617,13 @@ none of the recoverable candidate space.}
 \end{figure}
 
 \section{Discussion}
+
+Label-derived inputs and repeated use of Stage C outcomes limit the performance
+tables to exploratory historical evidence. Zeroing the input in a frozen
+checkpoint measures sensitivity; it does not validate a corrected training
+procedure. Retraining must record its splits and settings, followed by a
+frozen evaluation on fresh maps and shots. Blocking all 17 observed harmful
+seeds is not a safety guarantee on a new distribution.
 
 The d3/d5 results depend on the adoption rule as much as on edit generation.
 At d5, the candidate branch contains harmful seeds, but the final selected mode
@@ -604,6 +642,10 @@ candidate adoption; hardware-scale decoder performance is outside the scope of
 these experiments.
 
 \section{Conclusion}
+
+The following numbers are observations from the legacy runs. Performance
+improvement claims remain provisional pending label-independent retraining
+and independent reevaluation.
 
 The proposed pre-decoder selects small detector edits before PyMatching is run.
 On held-out \texttt{stage\_c\_corr}, selected-mode

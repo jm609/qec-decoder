@@ -131,9 +131,9 @@ def _metadata_context_features(
                     float(circuit.get("rounds", 0)) / 100.0,
                     float(circuit.get("num_detectors", 0)) / 4096.0,
                     float(qc_stats.get("detector_event_fraction", 0.0)),
-                    float(qc_stats.get("logical_flip_fraction", 0.0)),
-                    float(qc_stats.get("logical_x_flip_fraction", 0.0)),
-                    float(qc_stats.get("logical_z_flip_fraction", 0.0)),
+                    0.0,  # Preserve feature width while removing label-derived inputs.
+                    0.0,
+                    0.0,
                     float(occupancy_fraction),
                 ],
                 dtype=np.float32,
@@ -151,9 +151,9 @@ def _metadata_context_features(
         "meta_rounds_norm",
         "meta_num_detectors_norm",
         "meta_detector_event_fraction",
-        "meta_logical_flip_fraction",
-        "meta_logical_x_flip_fraction",
-        "meta_logical_z_flip_fraction",
+        "meta_reserved_label_context",
+        "meta_reserved_logical_x_context",
+        "meta_reserved_logical_z_context",
         "meta_occupancy_fraction",
     ] + [f"meta_{name}" for name in noise_signature_names]
     features = np.broadcast_to(values[None, :], (int(num_shots), values.shape[0])).astype(np.float32, copy=False)

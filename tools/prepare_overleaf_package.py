@@ -22,11 +22,16 @@ FIGURE_BASENAMES = [
     "fig5_d7_validation_heldout_scatter",
     "fig6_oracle_recovery_distribution",
 ]
-ROOT_FILES = [
-    Path("main.tex"),
-    Path("main.bib"),
-    Path("OVERLEAF_COMPILE_GUIDE.md"),
+D7_FIGURE_DIR = Path("artifacts/figures/d7_paper_evidence/20261117_final")
+D7_FIGURES = [
+    "fig01_same_shot_method.pdf",
+    "fig02_failure_diagnostic.pdf",
+    "fig03_selector_development.pdf",
+    "fig04_independent_effects.pdf",
+    "fig05_cost_and_accuracy.pdf",
 ]
+D7_MANUSCRIPTS = {"main_d7_en.tex", "main_d7_ko.tex"}
+COMPILE_GUIDE = Path("docs/thesis/OVERLEAF_COMPILE_GUIDE.md")
 OPTIONAL_AUDIT_FILES = [
     Path("artifacts/eval/nn/main_tex_static_check_summary.json"),
     Path("artifacts/eval/nn/sedp_final_result_consistency_check.json"),
@@ -34,11 +39,14 @@ OPTIONAL_AUDIT_FILES = [
 ]
 
 
-def _copy_file(src: Path, out_dir: Path, copied: list[str], missing: list[str]) -> None:
+def _copy_file(
+    src: Path, out_dir: Path, copied: list[str], missing: list[str],
+    *, package_path: Path | None = None,
+) -> None:
     if not src.exists():
         missing.append(src.as_posix())
         return
-    dest = out_dir / src
+    dest = out_dir / (package_path if package_path is not None else src)
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dest)
     copied.append(dest.as_posix())
@@ -46,6 +54,18 @@ def _copy_file(src: Path, out_dir: Path, copied: list[str], missing: list[str]) 
 
 def _write_package_readme(out_dir: Path, main_file: Path) -> None:
     readme = out_dir / "README_OVERLEAF_PACKAGE.md"
+    if main_file.name in D7_MANUSCRIPTS:
+        readme.write_text(
+            "# Current d7 manuscript package\n\n"
+            f"Set the Overleaf main document to {main_file.as_posix()} and use XeLaTeX.\n"
+            "The bibliography is inline; no external .bib file is needed.\n"
+            "Five PDF figures retain their repository-relative paths.\n"
+            "Keep the array compatibility setting in the manuscript.\n"
+            "Recompile from scratch when replacing an older project.\n\n"
+            "See OVERLEAF_COMPILE_GUIDE.md for warnings and verification limits.\n",
+            encoding="utf-8",
+        )
+        return
     readme.write_text(
         f"""# Overleaf Predecoder Thesis Package
 
@@ -77,16 +97,26 @@ def _zip_dir(out_dir: Path, zip_path: Path) -> None:
 
 
 def build_package(out_dir: Path, zip_path: Path, main_file: Path = Path("main.tex")) -> dict[str, Any]:
+    is_d7 = main_file.name in D7_MANUSCRIPTS
+    if is_d7 and (out_dir.exists() or zip_path.exists()):
+        raise FileExistsError("Use new output paths to preserve the existing d7 package")
     out_dir.mkdir(parents=True, exist_ok=True)
     copied: list[str] = []
     missing_required: list[str] = []
     missing_optional: list[str] = []
 
-    root_files = [main_file, Path("main.bib"), Path("OVERLEAF_COMPILE_GUIDE.md")]
-    for src in root_files:
+    for src in ([main_file] if is_d7 else [main_file, Path("main.bib")]):
         _copy_file(src, out_dir, copied, missing_required)
+    _copy_file(
+        COMPILE_GUIDE, out_dir, copied, missing_required,
+        package_path=Path(COMPILE_GUIDE.name),
+    )
 
-    for basename in FIGURE_BASENAMES:
+    if is_d7:
+        for name in D7_FIGURES:
+            _copy_file(D7_FIGURE_DIR / name, out_dir, copied, missing_required)
+
+    for basename in ([] if is_d7 else FIGURE_BASENAMES):
         found_latex_ready = False
         for suffix in (".pdf", ".png", ".svg"):
             candidates = [
@@ -101,7 +131,7 @@ def build_package(out_dir: Path, zip_path: Path, main_file: Path = Path("main.te
         if not found_latex_ready:
             missing_required.append((FIGURE_DIR / f"{basename}_v2.png").as_posix())
 
-    optional_audit_files = list(OPTIONAL_AUDIT_FILES)
+    optional_audit_files = [] if is_d7 else list(OPTIONAL_AUDIT_FILES)
     if main_file.name == "main_en.tex":
         optional_audit_files.insert(0, Path("artifacts/eval/nn/main_en_tex_static_check_summary.json"))
     for src in optional_audit_files:
@@ -117,7 +147,7 @@ def build_package(out_dir: Path, zip_path: Path, main_file: Path = Path("main.te
         "zip_path": zip_path.as_posix(),
         "compiler": "XeLaTeX",
         "main_file": main_file.as_posix(),
-        "figure_priority": ["pdf", "png"],
+        "figure_priority": ["pdf"] if is_d7 else ["pdf", "png"],
         "copied_files": copied,
         "missing_required": missing_required,
         "missing_optional": missing_optional,

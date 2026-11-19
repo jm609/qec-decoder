@@ -30,6 +30,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 import argparse
 import json
+import math
 import random
 
 try:
@@ -43,6 +44,7 @@ from config import (
     make_stage_c_config,
 )
 from circuits import build_memory_circuit, export_dataset_metadata
+from logical_frame import infer_rotated_data_qubits
 from noise_si1000 import (
     MissingStimError,
     _append_depolarize1,
@@ -536,6 +538,31 @@ def build_willowcore_memory_circuit(cfg: ExperimentConfig) -> Any:
     _ensure_stage_bc_only(cfg)
     seed = build_memory_circuit(cfg)
     return apply_willowcore_noise(seed, cfg).noisy_circuit
+
+
+def bias_willowcore_data_paulis(circuit: Any, *, distance: int, eta: float) -> Any:
+    """Redistribute existing data-qubit DEPOLARIZE1 rates in a flat WillowCore circuit."""
+    if not math.isfinite(eta) or eta < 0.5:
+        raise ValueError("Data Pauli Z bias eta must be finite and at least 0.5")
+    if eta == 0.5:
+        return circuit
+    data_qubits = set(infer_rotated_data_qubits(circuit))
+    if len(data_qubits) != distance**2:
+        raise ValueError("Expected a rotated memory circuit with distance squared data qubits")
+
+    out = _require_stim().Circuit()
+    for op in circuit:
+        if op.name != "DEPOLARIZE1":
+            out.append(op)
+            continue
+        (total,) = op.gate_args_copy()
+        xy = (total / (1.0 + eta)) * 0.5
+        for target in op.targets_copy():
+            if target.value in data_qubits:
+                out.append("PAULI_CHANNEL_1", [target], [xy, xy, total - 2 * xy])
+            else:
+                out.append("DEPOLARIZE1", [target], [total])
+    return out
 
 
 def count_correlated_instructions(circuit: Any) -> dict[str, int]:

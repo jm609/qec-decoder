@@ -41,6 +41,21 @@ Thumbs.db
 /*.md
 !/README.md
 !/AGENTS.md
+# Publish protocols and result reports; keep local handoffs and drafts.
+/docs/thesis/*
+!/docs/thesis/README.md
+!/docs/thesis/OVERLEAF_COMPILE_GUIDE.md
+!/docs/thesis/PREDECODER_METHOD_DESCRIPTION.md
+!/docs/thesis/PREDECODER_RESEARCH_INTEGRITY_AUDIT.md
+!/docs/thesis/PREDECODER_INDEPENDENT_REVALIDATION.md
+!/docs/thesis/PREDECODER_NOISE_SHIFT_EXPERIMENT_PLAN.md
+!/docs/thesis/PREDECODER_PAPER_EVIDENCE.md
+!/docs/thesis/PREDECODER_D7_*_PROTOCOL.md
+!/docs/thesis/results/
+/docs/thesis/results/*
+!/docs/thesis/results/*.md
+/.local/
+/graphify-out/
 
 # Personal root-level text files (requirements remains part of the project).
 /*.txt
@@ -61,7 +76,21 @@ artifacts/**
 *.ps1
 *.pdf
 *.zip
+*.pptx
+*.ppt
 *_발표대본.txt
+
+# Local credentials and EDA outputs
+.env
+.env.*
+!.env.example
+*.vvp
+*.vcd
+*.fsdb
+csrc/
+simv
+simv.daidir/
+DVEfiles/
 
 # LaTeX build outputs
 *.aux
@@ -77,3 +106,14 @@ artifacts/**
 *.run.xml
 *.synctex.gz
 *.toc
+*.xdv
+
+# Frozen publication figures are intentional exceptions to artifact rules.
+!artifacts/figures/
+!artifacts/figures/d7_paper_evidence/
+!artifacts/figures/d7_paper_evidence/20261117_final/
+!artifacts/figures/d7_paper_evidence/20261117_final/fig01_same_shot_method.pdf
+!artifacts/figures/d7_paper_evidence/20261117_final/fig02_failure_diagnostic.pdf
+!artifacts/figures/d7_paper_evidence/20261117_final/fig03_selector_development.pdf
+!artifacts/figures/d7_paper_evidence/20261117_final/fig04_independent_effects.pdf
+!artifacts/figures/d7_paper_evidence/20261117_final/fig05_cost_and_accuracy.pdf

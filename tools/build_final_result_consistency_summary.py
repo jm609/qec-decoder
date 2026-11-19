@@ -13,7 +13,7 @@ from typing import Any
 DEFAULT_CONSOLIDATED = Path(
     "artifacts/eval/nn/sedp_predecoder_consolidated_evidence_summary.json"
 )
-DEFAULT_RESULT_TABLES = Path("PREDECODER_FINAL_RESULT_TABLES.md")
+DEFAULT_RESULT_TABLES = Path("docs/thesis/results/PREDECODER_FINAL_RESULT_TABLES.md")
 
 
 def _load_json(path: Path) -> dict[str, Any]:

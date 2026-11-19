@@ -20,6 +20,7 @@ import json
 import math
 import sys
 import time
+import warnings
 
 import numpy as np
 
@@ -7932,6 +7933,7 @@ def train_family_dir(
             "num_shots": int(entry.x.shape[0]),
             "input_shape": list(entry.x.shape),
             "channel_names": list(entry.bundle_info.get("channel_names", [])),
+            "label_context_policy": entry.bundle_info.get("label_context_policy"),
             "matching": entry.matching_info,
             "training_config": training_config,
         },
@@ -8198,6 +8200,13 @@ def evaluate_checkpoint_on_family(
 ) -> dict[str, Any]:
     _require_torch()
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    if checkpoint.get("bundle_info", {}).get("label_context_policy") != "zero_reserved":
+        warnings.warn(
+            "Legacy checkpoint used label-derived context. Evaluation now zeros that slot; "
+            "this is a sensitivity check, not evidence from label-independent retraining.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
     entry = _prepare_edit_family(family_dir, fill_value=fill_value, max_shots=max_shots)
     model_kwargs = dict(checkpoint["model_kwargs"])
     model = SyndromeEditPreDecoder(**model_kwargs)
@@ -8481,6 +8490,10 @@ def evaluate_checkpoint_on_family(
             "local_motif": local_motif_result,
         },
     }
+    result["dataset"]["label_context_policy"] = entry.bundle_info.get("label_context_policy")
+    result["dataset"]["checkpoint_label_context_policy"] = checkpoint.get("bundle_info", {}).get(
+        "label_context_policy", "legacy_label_aggregate"
+    )
     _write_json(out_json, result)
     return result
 
@@ -9590,8 +9603,20 @@ def run_manifest_experiment(
             else None
         ),
         "bundle_info": train_entries[0].bundle_info,
+        "split_indices_by_family": {
+            family: {
+                "train": split.train.tolist(),
+                "val": split.val.tolist(),
+                "test": split.test.tolist(),
+            }
+            for family, split in split_by_family.items()
+        },
         "training_config": {
             "fill_value": float(fill_value),
+            "max_shots": max_shots,
+            "train_ratio": float(train_ratio),
+            "val_ratio": float(val_ratio),
+            "test_ratio": float(test_ratio),
             "batch_size": int(batch_size),
             "epochs": int(epochs),
             "lr": float(lr),
